@@ -192,7 +192,7 @@ function gistHeaders(){
 }
 function gistPull(){
   if(S.demo){ return Promise.resolve(); }
-  return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist), { headers: gistHeaders() })
+  return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist)+'?t='+Date.now(), { headers: gistHeaders(), cache:'no-store' })
     .then(function(r){ if(!r.ok) throw new Error('GitHub返回 '+r.status+(r.status===401?'（Token无效）':r.status===404?'（Gist ID无效）':'')); return r.json(); })
     .then(function(g){
       S.banks={}; S.power=[];
@@ -782,22 +782,50 @@ function loadSchedule(){
   // 点击展开，再次点击收起（不自动收起）
   var exist=$('sched-view');
   if(exist){ exist.remove(); toast('值班表已收起',1500); return; }
-  var sc=S.data['值班表_手机同步'];
+  // 多月份存档：值班表_历史 = { "2026-09": {...} }；无历史时退回单份的值班表_手机同步
+  var hist=S.data['值班表_历史'];
+  var keys=(hist&&typeof hist==='object')?Object.keys(hist).filter(function(k){return hist[k]&&hist[k].days;}).sort().reverse():[];
+  var sc=null, curKey='';
+  if(keys.length){ curKey=keys[0]; sc=hist[curKey]; }
+  else { sc=S.data['值班表_手机同步']; }
   if(!sc||!sc.days){ toast('云端暂无值班表数据：请先在电脑端「员工管理→值班管理」生成一次排班表',4000); return; }
-  var today=new Date();
-  var isCur=(today.getFullYear()===sc.year&&(today.getMonth()+1)===sc.month);
-  var todayD=isCur?today.getDate():-1;
   var me=S.cfg.name||'';
-  var h='<div class="card"><h3>'+sc.year+'年'+sc.month+'月 值班表</h3><div class="hint">更新于 '+esc(sc.generated_at||'')+' · 电脑端「值班表同步手机」保存上传后自动更新</div>'+
-    '<div style="overflow-x:auto"><table class="sched"><tr><th>日期</th><th>星期</th><th>科值班</th><th>机场东变</th><th>白班</th></tr>';
-  sc.days.forEach(function(d){
-    var meCls=function(v){ return (me&&v&&v.indexOf(me)>=0)?' me':''; };
-    h+='<tr'+(d.day===todayD?' class="today"':'')+'><td'+(d.day===todayD?' style="color:#0369a1;font-weight:700"':'')+'>'+d.day+'日'+(d.day===todayD?' 今天':'')+'</td><td>'+esc(d.week)+'</td>'+
-       '<td class="'+meCls(d.ke)+'">'+esc(d.ke)+'</td><td class="'+meCls(d.airport)+'">'+esc(d.airport)+'</td><td class="'+meCls(d.white)+'">'+esc(d.white)+'</td></tr>';
-  });
-  h+='</table></div></div><div class="card"><div class="hint">提示：把「设置」里的答题人姓名填成本人姓名，值班表中自己的名字会高亮。</div></div>';
+  var today=new Date();
+  if(keys.length){
+    // 默认选中当月（有当月存档时），否则最新月份
+    for(var i=0;i<keys.length;i++){
+      var rec=hist[keys[i]];
+      if(rec.year===today.getFullYear()&&rec.month===today.getMonth()+1){ curKey=keys[i]; break; }
+    }
+  }
+  function ymLabel(key){ return parseInt(key.slice(0,4),10)+'年'+parseInt(key.slice(5,7),10)+'月'; }
+  function table(scSel){
+    var isCur=(today.getFullYear()===scSel.year&&(today.getMonth()+1)===scSel.month);
+    var todayD=isCur?today.getDate():-1;
+    var h='<div class="hint">更新于 '+esc(scSel.generated_at||'')+' · 电脑端「值班表同步手机」保存上传后自动更新</div>'+
+      '<div style="overflow-x:auto"><table class="sched"><tr><th>日期</th><th>星期</th><th>科值班</th><th>机场东变</th><th>白班</th></tr>';
+    scSel.days.forEach(function(d){
+      var meCls=function(v){ return (me&&v&&v.indexOf(me)>=0)?' me':''; };
+      h+='<tr'+(d.day===todayD?' class="today"':'')+'><td'+(d.day===todayD?' style="color:#0369a1;font-weight:700"':'')+'>'+d.day+'日'+(d.day===todayD?' 今天':'')+'</td><td>'+esc(d.week)+'</td>'+
+         '<td class="'+meCls(d.ke)+'">'+esc(d.ke)+'</td><td class="'+meCls(d.airport)+'">'+esc(d.airport)+'</td><td class="'+meCls(d.white)+'">'+esc(d.white)+'</td></tr>';
+    });
+    return h+'</table></div>';
+  }
+  var h='<div class="card"><h3>值班表</h3>';
+  if(keys.length){
+    h+='<label style="margin-top:0">选择月份（共'+keys.length+'个月）</label><select id="sched-month">'+
+       keys.map(function(k){ return '<option value="'+k+'"'+(k===curKey?' selected':'')+'>'+ymLabel(k)+'</option>'; }).join('')+
+       '</select>';
+  }
+  h+='<div id="sched-body">'+table(hist?hist[curKey]:sc)+'</div></div>'+
+     '<div class="card"><div class="hint">提示：把「设置」里的答题人姓名填成本人姓名，值班表中自己的名字会高亮。</div></div>';
   $('page-home').insertAdjacentHTML('beforeend','<div id="sched-view">'+h+'</div>');
   var sv=$('sched-view'); setTimeout(function(){ sv&&sv.scrollIntoView(); },50);
+  var selEl=$('sched-month');
+  if(selEl) selEl.onchange=function(){
+    var scSel=hist?hist[this.value]:null;
+    if(scSel&&scSel.days){ $('sched-body').innerHTML=table(scSel); }
+  };
   toast('值班表已展开，再点一次「值班表」收起',2500);
 }
 
