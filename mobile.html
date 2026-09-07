@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#16223D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="东二供电站">
+<title>东二跑道供电站·手机版</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:#f2f4f8; color:#1f2937; font-size:15px; }
+#app { max-width:520px; margin:0 auto; min-height:100vh; padding-bottom:70px; }
+.page { display:none; padding:14px; }
+.page.active { display:block; }
+.header { background:linear-gradient(135deg,#16223D,#1E3A5F); color:#fff; padding:18px 16px 14px; }
+.header h1 { font-size:18px; font-weight:600; }
+.header .sub { font-size:12px; color:#8EBBF5; margin-top:3px; }
+.card { background:#fff; border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.card h3 { font-size:15px; margin-bottom:10px; color:#16223D; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.stat { background:linear-gradient(135deg,#f0f6ff,#e8f1ff); border-radius:10px; padding:10px; text-align:center; }
+.stat .v { font-size:20px; font-weight:700; color:#1E3A5F; }
+.stat .k { font-size:12px; color:#6b7a90; margin-top:2px; }
+.menu-item { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; padding:15px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.06); cursor:pointer; }
+.menu-item:active { background:#f0f4ff; }
+.menu-item .t { font-size:15px; font-weight:500; }
+.menu-item .d { font-size:12px; color:#9aa7b8; margin-top:2px; }
+.menu-item .arrow { color:#c3ccd8; }
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.b-good { background:#e6f9ee; color:#0a8f4d; } .b-mid { background:#fff6e0; color:#b7791f; } .b-bad { background:#feecec; color:#c53030; }
+.btn { display:block; width:100%; padding:12px; border:none; border-radius:10px; background:#1E3A5F; color:#fff; font-size:15px; font-weight:600; cursor:pointer; margin-top:12px; }
+.btn:active { opacity:.85; } .btn:disabled { background:#a8b6c9; }
+.btn.accent { background:#06B6D4; } .btn.plain { background:#e8edf4; color:#1E3A5F; } .btn.danger { background:#fee2e2; color:#c53030; }
+input,select,textarea { width:100%; padding:11px; border:1px solid #d5dce6; border-radius:9px; font-size:15px; margin-top:6px; background:#fbfcfe; }
+label { font-size:13px; color:#5b6b80; font-weight:600; display:block; margin-top:10px; }
+.tabbar { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:520px; background:#fff; display:flex; border-top:1px solid #e5eaf1; z-index:99; }
+.tabbar div { flex:1; text-align:center; padding:9px 0 7px; font-size:11px; color:#8a97a8; cursor:pointer; }
+.tabbar div .ic { font-size:19px; display:block; }
+.tabbar div.on { color:#1E3A5F; font-weight:700; }
+.q-title { font-size:16px; font-weight:600; line-height:1.55; margin:12px 0; }
+.q-type { font-size:12px; color:#06B6D4; font-weight:700; }
+.option { padding:13px; border:1.5px solid #dfe6ef; border-radius:10px; margin-bottom:9px; cursor:pointer; line-height:1.4; background:#fff; }
+.option.sel { border-color:#06B6D4; background:#ecfeff; font-weight:600; }
+.option.right { border-color:#22a35f; background:#eefaf3; }
+.option.wrong { border-color:#e06060; background:#fdf0f0; }
+.answer-sheet { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
+.answer-sheet span { text-align:center; padding:7px 0; border-radius:7px; background:#eef2f8; font-size:12px; cursor:pointer; }
+.answer-sheet span.done { background:#cfe3ff; color:#1E3A5F; font-weight:700; }
+.answer-sheet span.cur { outline:2px solid #06B6D4; }
+.bar { height:9px; background:#eef2f8; border-radius:5px; overflow:hidden; margin:4px 0 10px; }
+.bar i { display:block; height:100%; background:linear-gradient(90deg,#06B6D4,#3b82f6); border-radius:5px; }
+.row { display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid #f0f3f8; }
+.row:last-child { border-bottom:none; }
+.hint { font-size:12px; color:#98a5b6; line-height:1.6; margin-top:8px; }
+.tag { font-size:11px; color:#8a97a8; }
+.toast { position:fixed; top:14%; left:50%; transform:translateX(-50%); background:rgba(20,30,50,.92); color:#fff; padding:11px 20px; border-radius:9px; font-size:14px; z-index:999; display:none; max-width:86%; text-align:center; }
+table.sched { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.sched th { background:#16223D; color:#fff; padding:8px 4px; font-weight:600; }
+table.sched td { border-bottom:1px solid #eef1f6; padding:8px 4px; text-align:center; }
+table.sched tr.today td { background:#ecfeff; font-weight:700; }
+table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
+.wrong-item { border-left:3px solid #e06060; padding:9px 11px; background:#fdf7f7; border-radius:0 9px 9px 0; margin-bottom:9px; font-size:13.5px; line-height:1.6; }
+.wrong-item .wa { color:#c53030; } .wrong-item .ca { color:#0a8f4d; }
+.center { text-align:center; }
+.big-score { font-size:42px; font-weight:800; color:#1E3A5F; }
+.ok-item { border-left:3px solid #22a35f; padding:9px 11px; background:#f4fbf7; border-radius:0 9px 9px 0; margin-bottom:9px; font-size:13.5px; line-height:1.6; }
+.ok-item .wa { color:#0a8f4d; } .ok-item .ca { color:#0a8f4d; }
+.timer { font-weight:800; color:#1E3A5F; font-size:14px; white-space:nowrap; }
+.timer.warn { color:#c53030; animation:blink 1s infinite; }
+@keyframes blink { 50% { opacity:.35; } }
+.chkrow { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.chkrow input[type=checkbox] { width:18px; height:18px; margin:0; flex:none; }
+.chkrow label { flex:1; margin:0; font-size:14px; color:#1f2937; }
+.chkrow .num { width:76px; margin-top:0; flex:none; text-align:center; padding:8px 6px; }
+.qk { display:inline-block; padding:6px 11px; border-radius:8px; background:#eef2f8; color:#1E3A5F; font-size:12px; font-weight:600; margin:6px 6px 0 0; cursor:pointer; border:none; }
+.qk:active { background:#dfe8f4; }
+.setrow { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+.setrow label { margin:0; flex:1; }
+.setrow input { width:90px; margin:0; text-align:center; flex:none; }
+</style>
+</head>
+<body>
+<div id="app">
+<div class="header"><h1>东二跑道供电站</h1><div class="sub" id="hdrSub">智能办公系统 · 手机版</div></div>
+
+<!-- 首页 -->
+<div class="page active" id="page-home">
+  <div id="homeNotCfg" class="card" style="display:none">
+    <h3>还未配置</h3>
+    <div class="hint">首次使用请到「设置」填入 Gist ID 和 Token（与电脑端云端同步使用同一个 Gist）。<br>也可以先用下面的演示模式体验功能。</div>
+    <button class="btn plain" onclick="startDemo()"> ▶ 演示模式（内置示例数据）</button>
+  </div>
+  <div class="card" id="homeStats">
+    <h3>数据概览 <span class="tag" id="syncTime"></span></h3>
+    <div class="grid2">
+      <div class="stat"><div class="v" id="stExam">-</div><div class="k">累计考试人次</div></div>
+      <div class="stat"><div class="v" id="stWrong">-</div><div class="k">错题本题数</div></div>
+      <div class="stat"><div class="v" id="stBank">-</div><div class="k">可用题库</div></div>
+      <div class="stat"><div class="v" id="stPower">-</div><div class="k">本周电量</div></div>
+    </div>
+  </div>
+  <div class="menu-item" onclick="go('quiz')"><div><div class="t">📝 在线答题</div><div class="d">选题库刷题，自动判分，错题同步回电脑</div></div><span class="arrow">›</span></div>
+  <div class="menu-item" onclick="loadWrongBook()"><div><div class="t">📕 错题本</div><div class="d">历次错题汇总，支持错题重刷</div></div><span class="arrow">›</span></div>
+  <div class="menu-item" onclick="loadRecords()"><div><div class="t">📊 考试记录</div><div class="d">成绩、短板分析与AI点评</div></div><span class="arrow">›</span></div>
+  <div class="menu-item" onclick="loadSchedule()"><div><div class="t">🗓 值班表</div><div class="d">查看排班，高亮自己的班</div></div><span class="arrow">›</span></div>
+  <div class="menu-item" onclick="loadPower()"><div><div class="t">⚡ 电量数据</div><div class="d">本周电量、同比环比与趋势</div></div><span class="arrow">›</span></div>
+</div>
+
+<!-- 答题 -->
+<div class="page" id="page-quiz"></div>
+<!-- 错题本 -->
+<div class="page" id="page-wrong"></div>
+<!-- 记录 -->
+<div class="page" id="page-records"></div>
+<!-- 设置 -->
+<div class="page" id="page-set"></div>
+
+<div class="tabbar" id="tabbar">
+  <div class="on" onclick="go('home')"><span class="ic">🏠</span>首页</div>
+  <div onclick="go('quiz')"><span class="ic">📝</span>答题</div>
+  <div onclick="loadWrongBook()"><span class="ic">📕</span>错题本</div>
+  <div onclick="loadRecords()"><span class="ic">📊</span>记录</div>
+  <div onclick="go('set')"><span class="ic">⚙️</span>设置</div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 状态与工具 ================= */
+var APP_VER='20260907-final6';
+/* ★★★ 云端配置（已内嵌，打开自动同步）★★★
+   以后要换 Gist ID 或 Token：用记事本打开本文件，找到这两行，
+   只替换引号里面的字符串，保存后重新发到手机覆盖旧文件即可。 */
+var BUILTIN_GIST ='3bb564507a357b3b26f38d35fc19eadc';
+var BUILTIN_TOKEN='';
+var S = { cfg:null, data:null, banks:{}, power:[], demo:false };
+var $ = function(id){ return document.getElementById(id); };
+function toast(m, ms){ var t=$('toast'); t.innerHTML=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, ms||2400); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function saveCfg(){ try{ localStorage.setItem('app_cfg', JSON.stringify(S.cfg)); }catch(e){} }
+function loadCfg(){
+  /* 内嵌配置优先：改文件里的 BUILTIN 值后，所有手机打开都会用新值；
+     姓名/AI密钥仍存本机 localStorage */
+  var saved=null;
+  try{ saved=JSON.parse(localStorage.getItem('app_cfg')||'null'); }catch(e){ saved=null; }
+  saved=saved||{};
+  S.cfg={
+    gist:(BUILTIN_GIST||saved.gist||'').trim(),
+    token:(BUILTIN_TOKEN||saved.token||'').trim(),
+    name:(saved.name||'').trim(),
+    aikey:(saved.aikey||'').trim()
+  };
+}
+loadCfg();
+
+function go(p){
+  document.querySelectorAll('.page').forEach(function(e){ e.classList.remove('active'); });
+  $('page-'+p).classList.add('active');
+  var tabs=document.querySelectorAll('#tabbar div');
+  var idx={home:0,quiz:1,wrong:2,records:3,set:4}[p];
+  tabs.forEach(function(t,i){ t.classList.toggle('on', i===idx); });
+  window.scrollTo(0,0);
+  if(p==='home') renderHome();
+  if(p==='set') renderSet();
+  if(p==='quiz' && !$('qz-list')) renderQuizHome();
+}
+
+/* ================= Gist 数据层 ================= */
+function gistHeaders(){
+  /* 无 Token 时匿名读取（iOS版从网址打开即属此场景）：看题库/记录/值班表/电量不需要Token */
+  var h = { 'Accept':'application/vnd.github+json' };
+  if(S.cfg.token){ h['Authorization'] = 'Bearer '+S.cfg.token; }
+  return h;
+}
+function gistPull(){
+  if(S.demo){ return Promise.resolve(); }
+  return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist), { headers: gistHeaders() })
+    .then(function(r){ if(!r.ok) throw new Error('GitHub返回 '+r.status+(r.status===401?'（Token无效）':r.status===404?'（Gist ID无效）':'')); return r.json(); })
+    .then(function(g){
+      S.banks={}; S.power=[];
+      Object.keys(g.files).forEach(function(name){
+        var c=g.files[name]&&g.files[name].content; if(!c) return;
+        if(name==='data.json'){
+          try{ S.data=JSON.parse(c); }catch(e){ console.warn('data.json解析失败'); } return;
+        }
+        if(name==='power_history.json'){
+          try{ S.power=JSON.parse(c); }catch(e){} return;
+        }
+        if(!/\.json$/i.test(name)) return;
+        try{
+          var arr=JSON.parse(c);
+          if(Array.isArray(arr)&&arr.length&&arr[0]&&arr[0].question!==undefined){ S.banks[name.replace(/\.json$/i,'')]=arr; }
+        }catch(e){}
+      });
+      if(!S.data){ S.data={}; }
+      S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    });
+}
+function gistPatchData(newData){
+  if(S.demo){ return Promise.reject(new Error('演示模式不能上传')); }
+  return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist), {
+    method:'PATCH', headers: gistHeaders(),
+    body: JSON.stringify({ files:{ 'data.json': { content: JSON.stringify(newData, null, 4) } } })
+  }).then(function(r){ if(!r.ok) throw new Error('上传失败 GitHub '+r.status); return r.json(); });
+}
+function refreshData(){ return gistPull(); }
+
+/* ================= 演示数据 ================= */
+function startDemo(){
+  S.demo=true;
+  S.data={ '本周电量':12.56,'上周电量':11.9,'电量环比':5.5,'去年同期电量':13.2,'电量同比':-4.8,
+    '本周临飞线电量':3.2,'本周双飞线电量':4.1,'exam_scores':[
+      {id:'1',examinee:'演示考生',score:85,total_score:100,date:'2026-09-01 10:00:00',question_bank:'演示题库',accuracy:85,qualification_level:'良好',
+       analysis_by_type:{'单选题':{got:17,total:20},'判断题':{got:8.5,total:10}},
+       wrong_questions:[{题号:3,题型:'单选题',题目:'演示：下列哪项属于重大隐患判定标准？',你的答案:'A',正确答案:'B',解析:'演示解析'}],
+       question_results:[
+         {num:1,type:'单选题',question:'演示：空气中允许的氧气体积分数下限是？',score:10,user_answer:'C',correct_answer:'C',is_correct:true,analysis:'受限空间作业氧含量应为19.5%~23.5%。',options:['17%','18%','19.5%','21%']},
+         {num:2,type:'判断题',question:'演示：雷电天气可以进行倒闸操作。',score:10,user_answer:'错误',correct_answer:'错误',is_correct:true,analysis:'雷电时严禁倒闸操作。',options:[]},
+         {num:3,type:'单选题',question:'演示：下列哪项属于重大隐患判定标准？',score:10,user_answer:'A',correct_answer:'B',is_correct:false,analysis:'演示解析',options:['选项A','选项B','选项C','选项D']}]}],
+    '值班表_手机同步':{year:2026,month:9,generated_at:'2026-09-01 08:00:00',days:[
+      {day:1,week:'二',ke:'朱翔鹏',airport:'崔怀旭',white:'白班、朱翔鹏'},{day:2,week:'三',ke:'王勃',airport:'朱翔鹏',white:'白班、王勃'},{day:3,week:'四',ke:'崔怀旭',airport:'王勃',white:'白班、崔怀旭'}]}};
+  S.banks={'演示题库':[
+    {type:'单选题',question:'演示题：空气中允许的氧气体积分数下限是？',options:['17%','18%','19.5%','21%'],answer:'C',score:1,analysis:'受限空间作业氧含量应为19.5%~23.5%。'},
+    {type:'判断题',question:'演示题：雷电天气可以进行倒闸操作。',answer:'错误',score:1,analysis:'雷电时严禁倒闸操作。'},
+    {type:'多选题',question:'演示题：保证安全的技术措施包括？',options:['停电','验电','装设接地线','悬挂标示牌'],answer:'ABCD',score:1,analysis:'四项均为保证安全的技术措施。'}]};
+  S.power=[{time:'2026-08-30 09:00:00',weekly_power:11.9,ratio:-2.1,yoy:3.3},{time:'2026-09-06 09:00:00',weekly_power:12.56,ratio:5.5,yoy:-4.8}];
+  S.cfg.name=S.cfg.name||'演示考生';
+  $('hdrSub').textContent='演示模式 · 数据不可上传';
+  toast('已进入演示模式',1500);
+  refreshHomeStats(); go('home');
+}
+
+/* ================= 首页 ================= */
+function fmtPower(v){ return (v===undefined||v===null||v==='')?'-':v; }
+function refreshHomeStats(){
+  if(!S.data){ return; }
+  var sc=(S.data.exam_scores||[]).filter(isMine); /* 只统计本人的记录 */
+  $('stExam').textContent=sc.length;
+  var wset={}; sc.forEach(function(r){ (r.wrong_questions||[]).forEach(function(w){ if(w&&w['题目']) wset[w['题目']]=1; }); });
+  $('stWrong').textContent=Object.keys(wset).length;
+  $('stBank').textContent=Object.keys(S.banks).length;
+  $('stPower').textContent=fmtPower(S.data['本周电量']);
+  $('syncTime').textContent=S.demo?'演示模式':(S._pullTime?('数据拉取于 '+S._pullTime):'');
+}
+function renderHome(){
+  var ok = S.demo || (S.cfg&&S.cfg.gist&&S.cfg.token);
+  $('homeNotCfg').style.display = (S.demo||S.data)?'none':'block';
+  if(S.data) refreshHomeStats();
+}
+
+/* ================= 答题 ================= */
+var QZ=null;
+var TYPE_KEYS=['单选题','多选题','判断题','填空题','简答题'];
+function defaultExamCfg(){
+  var types={};
+  TYPE_KEYS.forEach(function(t){ types[t]={on:(t!=='简答题'),n:''}; });
+  return {mode:'顺序出题', shuffleOpts:false, mix:false, total:100, minutes:60, types:types};
+}
+function examCfg(){
+  var c=S.cfg.examCfg;
+  if(!c||!c.types){ c=defaultExamCfg(); S.cfg.examCfg=c; }
+  return c;
+}
+function saveExamCfg(){
+  var c=examCfg();
+  c.mode=$('qz-order')?$('qz-order').value:c.mode;
+  c.shuffleOpts=$('qz-shuffle')?$('qz-shuffle').checked:c.shuffleOpts;
+  c.mix=$('qz-mix')?$('qz-mix').checked:c.mix;
+  c.total=parseFloat($('qz-total').value)||100;
+  c.minutes=parseFloat($('qz-min').value); if(isNaN(c.minutes)||c.minutes<0) c.minutes=60;
+  TYPE_KEYS.forEach(function(t,i){
+    var chk=$('qz-ty-'+i), num=$('qz-n-'+i);
+    if(chk) c.types[t].on=chk.checked;
+    if(num) c.types[t].n=num.value.trim();
+  });
+  S.cfg.examCfg=c; saveCfg();
+}
+function setChk(i,v){ var e=$('qz-ty-'+i); if(e) e.checked=v; }
+function qkPick(arr){
+  TYPE_KEYS.forEach(function(t,i){ setChk(i, arr.indexOf(i)>=0); });
+  var names=arr.map(function(i){ return TYPE_KEYS[i]; }).join('、');
+  toast('已设为只做：'+names,1800);
+}
+function renderQuizHome(){
+  if(!S.data && !S.demo){ $('page-quiz').innerHTML='<div class="card"><h3>请先配置</h3><div class="hint">到「设置」填好 Gist ID 和 Token 后，点右上角"拉取数据"再来答题。</div><button class="btn" onclick="pullNow()">立即拉取数据</button></div>'; return; }
+  var names=Object.keys(S.banks);
+  var cur=S.data&&S.data['当前题库文件']?String(S.data['当前题库文件']).replace(/\.json$/i,'').replace(/^.*[\\\/]/,''):'';
+  if(!names.length && S.data && Array.isArray(S.data['题库']) && S.data['题库'].length){ S.banks[cur||'当前题库']=S.data['题库']; names=Object.keys(S.banks); }
+  if(!names.length){ $('page-quiz').innerHTML='<div class="card"><h3>没有可用题库</h3><div class="hint">云端 Gist 中未识别到题库文件（题库为包含 question 字段的 JSON 数组）。请在电脑端先上传数据。</div></div>'; return; }
+  var opts=names.map(function(n){ return '<option'+(n===cur?' selected':'')+'>'+esc(n)+'</option>'; }).join('');
+  var c=examCfg();
+  var bankCount={}; names.forEach(function(n){ var cnt={}; (S.banks[n]||[]).forEach(function(q){ var t=q.type||'未知'; cnt[t]=(cnt[t]||0)+1; }); bankCount[n]=cnt; });
+  var bankInfo=names.map(function(n){
+    var cnt=bankCount[n];
+    return n+'（'+Object.keys(cnt).map(function(t){ return t+(cnt[t]||0)+'题'; }).join(' ')+'）';
+  }).join('；');
+  var tyRows=TYPE_KEYS.map(function(t,i){
+    var tc=c.types[t]||{on:true,n:''};
+    return '<div class="chkrow"><input type="checkbox" id="qz-ty-'+i+'"'+(tc.on?' checked':'')+'><label for="qz-ty-'+i+'">'+t+'</label><input class="num" id="qz-n-'+i+'" value="'+esc(tc.n)+'" placeholder="全部" inputmode="numeric"></div>';
+  }).join('');
+  $('page-quiz').innerHTML=
+    '<div class="card"><h3>开始答题</h3>'+
+    '<label>选择题库</label><select id="qz-bank">'+opts+'</select>'+
+    '<div class="hint">各题库题量：'+esc(bankInfo)+'</div>'+
+    '<label>出题模式</label><select id="qz-order"><option'+(c.mode==='顺序出题'?' selected':'')+'>顺序出题</option><option'+(c.mode==='随机出题'?' selected':'')+'>随机出题</option></select>'+
+    '<label>答题人</label><input id="qz-name" value="'+esc(S.cfg.name||'')+'" placeholder="考生姓名（成绩将记到该名下）">'+
+    '</div>'+
+    '<div class="card"><h3>考试范围（只做想练的题型）</h3>'+
+    '<div class="hint">勾选题型并填数量；数量留空 = 该题型全部。与电脑端"各题型数量"一致。</div>'+
+    tyRows+
+    '<div style="margin-top:6px"><span class="tag">快捷筛选：</span>'+
+    '<button class="qk" onclick="qkPick([0,1])">只做选择题</button>'+
+    '<button class="qk" onclick="qkPick([2])">只做判断</button>'+
+    '<button class="qk" onclick="qkPick([3])">只做填空</button>'+
+    '<button class="qk" onclick="qkPick([0,1,2,3,4])">全都要</button></div>'+
+    '<div class="setrow"><label>选项打乱（打乱选项顺序并换答案字母）</label><input type="checkbox" id="qz-shuffle"'+(c.shuffleOpts?' checked':'')+' style="width:20px;height:20px"></div>'+
+    '<div class="setrow"><label>题型混合（各题型题目打乱顺序）</label><input type="checkbox" id="qz-mix"'+(c.mix?' checked':'')+' style="width:20px;height:20px"></div>'+
+    '<div class="setrow"><label>试卷满分（按比例折算每题分数）</label><input id="qz-total" value="'+esc(c.total)+'" inputmode="decimal"></div>'+
+    '<div class="setrow"><label>考试时长/分钟（0 = 不限时）</label><input id="qz-min" value="'+esc(c.minutes)+'" inputmode="numeric"></div>'+
+    '</div>'+
+    '<button class="btn accent" id="qz-start">开始答题</button>'+
+    '<div class="card"><div class="hint">支持 单选题 / 多选题 / 判断题 / 填空题 / 简答题；判分、满分折算、资质评定（90分以上优秀，75分以上合格）规则与电脑端一致。考试剩余时间会显示在答题页顶部，到时自动交卷。</div></div>';
+  $('qz-start').onclick=function(){
+    saveExamCfg();
+    var cfg=examCfg();
+    var bank=$('qz-bank').value;
+    var nm=$('qz-name').value.trim(); if(!nm){ toast('请填写答题人姓名'); return; }
+    S.cfg.name=nm; saveCfg();
+    var qs=buildExam(bank,cfg);
+    if(!qs) return;
+    startQuiz(bank, qs, nm, cfg.minutes, cfg.total);
+  };
+}
+function shuffleArr(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+function sampleArr(pool,num){ var idx=pool.map(function(_,i){ return i; }); shuffleArr(idx); return idx.slice(0,num).map(function(i){ return pool[i]; }); }
+function shuffleOpts(q){
+  /* 移植电脑端 shuffle_choice_options：打乱选项顺序并映射答案字母 */
+  var ops=q.options;
+  if(!Array.isArray(ops)||!ops.length){ return q; }
+  var indexed=ops.map(function(o,i){ return [o,i]; });
+  shuffleArr(indexed);
+  var newOps=indexed.map(function(x){ return x[0]; });
+  var indexMap={}; indexed.forEach(function(x,ni){ indexMap[x[1]]=ni; });
+  var correct=q.answer;
+  function mapLetter(L){
+    if(typeof L!=='string'||!L){ return L; }
+    L=L.toUpperCase();
+    var oi=L.charCodeAt(0)-65;
+    if(oi in indexMap){ return String.fromCharCode(65+indexMap[oi]); }
+    return L;
+  }
+  var newAns=correct;
+  if(Array.isArray(correct)){
+    var letters=[];
+    correct.forEach(function(it){ if(typeof it==='string'){ it.split('').forEach(function(ch){ if(ch.trim()) letters.push(ch); }); } });
+    newAns=letters.map(mapLetter).join('');
+  } else if(typeof correct==='string'){
+    var ls=correct.split('').filter(function(ch){ return ch.trim(); });
+    newAns=(ls.length===1)?mapLetter(ls[0]):ls.map(mapLetter).join('');
+  }
+  var q2={}; Object.keys(q).forEach(function(k){ q2[k]=q[k]; });
+  q2.options=newOps; q2.answer=newAns;
+  return q2;
+}
+function buildExam(bank,cfg){
+  /* 对齐电脑端 generate_exam：按题型数量抽题（顺序取前N/随机抽样），可混合打乱 */
+  var all=S.banks[bank]||[];
+  var exam=[];
+  TYPE_KEYS.forEach(function(t){
+    var tc=cfg.types[t];
+    if(!tc||!tc.on){ return; }
+    var pool=all.filter(function(q){ return (q.type||'')==t; });
+    if(!pool.length){ return; }
+    var n=String(tc.n==null?'':tc.n).trim();
+    var num=parseInt(n,10);
+    if(!n||isNaN(num)||num<=0||num>=pool.length){
+      exam=exam.concat(pool);
+    } else if(cfg.mode==='随机出题'){
+      exam=exam.concat(sampleArr(pool,num));
+    } else {
+      exam=exam.concat(pool.slice(0,num));
+    }
+  });
+  if(!exam.length){ toast('没有选中任何题型，或题库为空'); return null; }
+  if(cfg.mix){ shuffleArr(exam); }
+  if(cfg.shuffleOpts){ exam=exam.map(shuffleOpts); }
+  return exam;
+}
+function startQuiz(bank, qs, name, minutes, totalMarks){
+  if(QZ&&QZ.tid){ clearInterval(QZ.tid); }
+  var orig=0; qs.forEach(function(q){ orig+=parseFloat(q.score)||1; });
+  var factor=(totalMarks&&orig>0)?(totalMarks/orig):1;
+  qs.forEach(function(q){ q._sc=Math.round((parseFloat(q.score)||1)*factor*10)/10; });
+  QZ={bank:bank,qs:qs,name:name,cur:0,ans:{},done:false,
+      endAt:(minutes&&minutes>0)?(Date.now()+minutes*60000):0,tid:0};
+  go('quiz'); renderQ();
+  QZ.tid=setInterval(function(){
+    if(!QZ){ return; }
+    var el=$('qz-timer'); if(!el){ return; }
+    if(QZ.done){ if(QZ.tid){ clearInterval(QZ.tid); QZ.tid=0; } return; }
+    if(!QZ.endAt){ el.textContent='不限时'; return; }
+    var left=Math.max(0,Math.round((QZ.endAt-Date.now())/1000));
+    var m=Math.floor(left/60), s=left%60;
+    el.textContent='剩余 '+('0'+m).slice(-2)+':'+('0'+s).slice(-2);
+    el.className='timer'+(left<=300?' warn':'');
+    if(left<=0){ el.textContent='时间到！'; toast('考试时间到，自动交卷',2500); submitQuiz(true); }
+  },1000);
+}
+function optLetters(n){ return 'ABCDEFGHIJKLMNOP'.slice(0,n).split(''); }
+function renderQ(){
+  var q=QZ.qs[QZ.cur], i=QZ.cur, a=QZ.ans[i];
+  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+        '<span class="q-type">['+esc(q.type||'题目')+'] 第 '+(i+1)+' / '+QZ.qs.length+' 题 · '+Math.round((q._sc!==undefined?q._sc:parseFloat(q.score)||1)*10)/10+'分</span>'+
+        '<span class="timer" id="qz-timer">'+(QZ.endAt?'计算中...':'不限时')+'</span></div>'+
+        '<div class="q-title">'+esc(q.question)+'</div>';
+  var t=q.type||'';
+  if(t==='单选题'){
+    var ops=q.options||[];
+    if(!ops.length){
+      /* 错题重刷场景：没有选项列表，改为输入字母 */
+      var v1=(Array.isArray(a)?'':a)||'';
+      h+='<input value="'+esc(v1)+'" placeholder="无选项：输入答案字母（如 A）" oninput="QZ.ans['+i+']=this.value.toUpperCase()">';
+    } else {
+      ops.forEach(function(op,oi){
+        var L=optLetters(ops.length)[oi];
+        h+='<div class="option'+(a===L?' sel':'')+'" onclick="QZ.ans['+i+']=\''+L+'\';renderQ()"><b>'+L+'.</b> '+esc(op)+'</div>';
+      });
+    }
+  } else if(t==='判断题'){
+    ['正确','错误'].forEach(function(v){
+      h+='<div class="option'+(a===v?' sel':'')+'" onclick="QZ.ans['+i+']=\''+v+'\';renderQ()">'+v+'</div>';
+    });
+  } else if(t==='多选题'){
+    var sel=Array.isArray(a)?a:[];
+    var mops=q.options||[];
+    if(!mops.length){
+      /* 错题重刷场景：没有选项列表，改为输入字母（多个连写） */
+      var v2=(Array.isArray(a)?a.join(''):a)||'';
+      h+='<input value="'+esc(v2)+'" placeholder="无选项：输入答案字母，多个连写（如 ABD）" oninput="QZ.ans['+i+']=this.value.toUpperCase()">';
+    } else {
+      mops.forEach(function(op,oi){
+        var L=optLetters(mops.length)[oi];
+        h+='<div class="option'+(sel.indexOf(L)>=0?' sel':'')+'" onclick="toggleMulti('+i+',\''+L+'\')"><b>'+L+'.</b> '+esc(op)+'</div>';
+      });
+    }
+  } else if(t==='填空题'||t==='简答题'){
+    var fe=(t==='填空题')?fillExpected(q):{blanks:1};
+    var blanks=fe.blanks;
+    h+='<div class="hint">'+(t==='简答题'?'请输入答案（与标准答案文本一致才判对）':(blanks>1?('共'+blanks+'个空，请分别填写'):'请填写答案'))+'</div>';
+    for(var b=0;b<blanks;b++){
+      var v=(Array.isArray(a)?a[b]:'')||'';
+      h+='<input id="qz-blank-'+b+'" value="'+esc(v)+'" placeholder="第'+(b+1)+'空" oninput="blankInput('+i+','+b+',this.value)">';
+    }
+  } else {
+    h+='<div class="hint">未知题型，请人工核对</div>';
+  }
+  h+='<div style="display:flex;gap:8px;margin-top:12px">'+
+     '<button class="btn plain" style="margin-top:0" onclick="qzNav(-1)">上一题</button>'+
+     '<button class="btn plain" style="margin-top:0" onclick="qzNav(1)">下一题</button></div>';
+  if(t==='多选题'){ h+='<button class="btn plain" onclick="toast(\'多选题直接点选多个选项\')">多选提示</button>'; }
+  h+='</div>';
+  h+='<div class="card"><h3>答题卡</h3><div class="answer-sheet">';
+  QZ.qs.forEach(function(_,qi){
+    var _a=QZ.ans[qi];
+    var _done=(_a!==undefined&&_a!==null&&_a!==''&&!(Array.isArray(_a)&&_a.length===0));
+    h+='<span class="'+(_done?'done':'')+(qi===i?' cur':'')+'" onclick="QZ.cur='+qi+';renderQ()">'+(qi+1)+'</span>';
+  });
+  h+='</div><button class="btn accent" onclick="submitQuiz()">交卷并判分</button></div>';
+  $('page-quiz').innerHTML=h;
+}
+function toggleMulti(i,L){
+  var a=QZ.ans[i]; a=Array.isArray(a)?a.slice():[];
+  var k=a.indexOf(L); if(k>=0) a.splice(k,1); else a.push(L);
+  QZ.ans[i]=a; renderQ();
+}
+function blankInput(i,b,v){
+  var a=QZ.ans[i];
+  if(!Array.isArray(a)) a=[];
+  a[b]=v; QZ.ans[i]=a;
+}
+function qzNav(d){
+  var n=QZ.cur+d; if(n<0||n>=QZ.qs.length){ if(d>0) submitQuiz(); return; }
+  QZ.cur=n; renderQ();
+}
+function answerText(v){
+  /* 与电脑端 format_answer 一致：嵌套数组(每空多可选)用"/"连接，多空用"，"分隔 */
+  if(Array.isArray(v)){
+    var parts=[];
+    v.forEach(function(it){
+      if(Array.isArray(it)){ parts.push(it.filter(function(x){ return String(x).trim(); }).join('/')); }
+      else if(String(it).trim()){ parts.push(String(it)); }
+    });
+    return parts.join('，');
+  }
+  if(v===null||v===undefined){ return ''; }
+  return String(v);
+}
+function normAns(s){ return String(s==null?'':s).trim(); }
+function normJudge(s){
+  var v=normAns(s);
+  var m={'√':'正确','×':'错误','✓':'正确','✗':'错误','对':'正确','错':'错误','T':'正确','F':'错误','TRUE':'正确','FALSE':'错误','是':'正确','否':'错误'};
+  return m[v.toUpperCase()]||m[v]||v;
+}
+function normLetters(s){
+  return String(s==null?'':(Array.isArray(s)?s.join(''):s)).toUpperCase().replace(/[^A-Z]/g,'').split('').sort().join('');
+}
+function countFillBlanks(text){
+  /* 与电脑端 count_fill_blanks 一致：统计题干中空的数量 */
+  var s=String(text||''), n=0;
+  [/_{3,}/g,/…{2,}/g,/（\s*）/g,/（　+）/g,/\(\s*\)/g,/【\s*】/g,/\?{3,}/g].forEach(function(p){
+    var m=s.match(p); if(m) n+=m.length;
+  });
+  return n;
+}
+function fillExpected(q){
+  /* 解析填空题答案结构 → {blanks:空数, exp:每空合法答案(字符串或字符串数组)}
+     兼容三种存储格式：
+     1. [["一","1","壹"],["0.3"]] 每空多个可选答案（嵌套数组）
+     2. ["1.9","0.3"]            每空一个答案（扁平字符串数组，按题干空数对齐）
+     3. "1.9, 0.3"               纯字符串（按分隔符拆分，空数与题干对齐） */
+  var ans=q.answer, bc=countFillBlanks(q.question);
+  if(Array.isArray(ans)&&ans.length&&Array.isArray(ans[0])){ return {blanks:ans.length, exp:ans}; }
+  if(Array.isArray(ans)&&ans.length&&typeof ans[0]==='string'){
+    if(ans.length===bc) return {blanks:bc, exp:ans};
+    if(bc===1) return {blanks:1, exp:[ans]};
+    return {blanks:ans.length, exp:ans};
+  }
+  var s=String(ans==null?'':ans).trim();
+  var parts=s.split(/[;；\n、，,]/).map(function(x){ return x.trim(); }).filter(function(x){ return x; });
+  if(bc>1&&parts.length===bc) return {blanks:bc, exp:parts};
+  return {blanks:Math.max(1,bc), exp:[s]};
+}
+function judge(q, ua){
+  var t=q.type||'', ans=q.answer;
+  if(t==='单选题'){ return normAns(ua)===normAns(ans); }
+  if(t==='判断题'){ return normJudge(ua)===normJudge(ans); }
+  if(t==='多选题'){
+    /* 用户答案可能是数组（点选）或字符串（无选项输入），统一提取字母排序后比较，
+       与电脑端 "".join(sorted(...)) 规则一致 */
+    var u=normLetters(ua);
+    return u.length>0 && u===normLetters(ans);
+  }
+  if(t==='填空题'){
+    var fe=fillExpected(q);
+    var arr=Array.isArray(ua)?ua.map(normAns):[normAns(ua)];
+    /* 只有一个输入但有多空时（如错题重刷只给了一个框），按分隔符拆开 */
+    if(arr.length===1&&fe.blanks>1){
+      arr=String(arr[0]||'').split(/[;；\n、，,]/).map(function(x){ return x.trim(); });
+    }
+    if(arr.length!==fe.blanks) return false;
+    for(var i=0;i<fe.blanks;i++){
+      var u=arr[i], ok=false, cs=Array.isArray(fe.exp[i])?fe.exp[i]:[fe.exp[i]];
+      cs.forEach(function(c){ if(u===normAns(c)) ok=true; });
+      if(!ok) return false;
+    }
+    return true;
+  }
+  if(t==='简答题'){
+    var u1=Array.isArray(ua)?(ua[0]||''):ua;
+    var cs=Array.isArray(ans)?ans:[ans];
+    return cs.some(function(c){ return normAns(u1)===normAns(c); });
+  }
+  return normAns(ua)===normAns(ans);
+}
+function levelOf(acc){ return acc>=90?'优秀':(acc>=75?'合格':'需提升'); }
+function submitQuiz(force){
+  if(!QZ||QZ.done) return;
+  var unanswered=QZ.qs.filter(function(_,i){
+    var a=QZ.ans[i];
+    return a===undefined||a===null||a===''||(Array.isArray(a)&&a.length===0);
+  }).length;
+  if(unanswered>0 && !force && !confirm('还有 '+unanswered+' 题未作答，确定交卷？')) return;
+  QZ.done=true;
+  if(QZ.tid){ clearInterval(QZ.tid); QZ.tid=0; }
+  var score=0,total=0,wrongs=[],byType={},results=[];
+  QZ.qs.forEach(function(q,i){
+    var sc=(q._sc!==undefined)?q._sc:(parseFloat(q.score)||1), t=q.type||'未知题型';
+    total+=sc;
+    if(!byType[t]) byType[t]={got:0,total:0};
+    byType[t].total+=sc;
+    var ua=QZ.ans[i], correct=judge(q,ua);
+    var uaText=(ua===undefined||ua===null||ua==='')?'未作答':(Array.isArray(ua)?ua.join(' | '):String(ua));
+    if(correct){ score+=sc; byType[t].got+=sc; }
+    else wrongs.push({题号:i+1,题型:t,题目:q.question,你的答案:uaText,正确答案:answerText(q.answer),解析:q.analysis||''});
+    /* 全题明细，与电脑端 question_results 同结构，用于试卷回放（含答对的题） */
+    results.push({num:i+1,type:t,question:q.question,score:sc,user_answer:uaText,
+      correct_answer:q.answer,is_correct:correct,analysis:q.analysis||'',options:q.options||[]});
+  });
+  score=Math.round(score*10)/10; total=Math.round(total*10)/10;
+  var acc=total?Math.round(score/total*1000)/10:0;
+  QZ.result={score:score,total:total,acc:acc,wrongs:wrongs,byType:byType,level:levelOf(acc),results:results};
+  renderResult();
+}
+function renderReplay(results){
+  /* 试卷回放：答对绿色、答错红色，含你的答案/正确答案/解析（对齐电脑端"考试卷回放"） */
+  var h='<div class="card"><h3>试卷回放（'+results.length+'题，含答对的题）</h3>'+
+    '<div class="hint">绿色=答对，红色=答错。做对的题也可以回顾一遍加深记忆。</div>';
+  results.forEach(function(it){
+    h+='<div class="'+(it.is_correct?'ok-item':'wrong-item')+'"><b>['+esc(it.type||'')+']</b> 第'+(it.num||'')+'题 '+esc(it.question||'')+
+       ' <span class="badge '+(it.is_correct?'b-good':'b-bad')+'">'+(it.is_correct?'答对':'答错')+'</span><br>'+
+       '<span class="wa">你的答案：'+esc(it.user_answer||'未作答')+'</span><br><span class="ca">正确答案：'+esc(answerText(it.correct_answer))+'</span>'+
+       (it.analysis?'<br><span class="tag">解析：'+esc(it.analysis)+'</span>':'')+'</div>';
+  });
+  return h+'</div>';
+}
+function renderResult(){
+  var r=QZ.result;
+  var h='<div class="card center"><div class="tag">本次成绩</div><div class="big-score">'+r.score+'<span style="font-size:18px;color:#8a97a8">/'+r.total+'</span></div>'+
+    '<div style="margin-top:6px"><span class="badge '+(r.acc>=90?'b-good':(r.acc>=75?'b-mid':'b-bad'))+'">'+r.level+' · 正确率 '+r.acc+'%</span></div>'+
+    '<div class="hint">答题人：'+esc(QZ.name)+' · 题库：'+esc(QZ.bank)+'</div></div>';
+  h+='<div class="card"><h3>各题型得分率</h3>';
+  Object.keys(r.byType).forEach(function(t){
+    var bt=r.byType[t], p=bt.total?Math.round(bt.got/bt.total*100):0;
+    h+='<div style="display:flex;justify-content:space-between;font-size:13px"><span>'+esc(t)+'</span><span>'+bt.got+'/'+bt.total+'（'+p+'%）</span></div><div class="bar"><i style="width:'+p+'%"></i></div>';
+  });
+  h+='</div>';
+  h+='<div class="card"><h3>错题解析（'+r.wrongs.length+'题）</h3>';
+  if(!r.wrongs.length) h+='<div class="hint">全部答对，干得漂亮！</div>';
+  r.wrongs.forEach(function(w){
+    h+='<div class="wrong-item"><b>['+esc(w.题型)+']</b> '+esc(w.题目)+'<br>'+
+       '<span class="wa">你的答案：'+esc(w.你的答案)+'</span><br><span class="ca">正确答案：'+esc(w.正确答案)+'</span>'+
+       (w.解析?'<br><span class="tag">解析：'+esc(w.解析)+'</span>':'')+'</div>';
+  });
+  h+='</div>';
+  h+=renderReplay(r.results);
+  h+='<button class="btn accent" id="btn-upload">'+(S.demo?'演示模式不能上传':'上传成绩到云端（同步回电脑）')+'</button>';
+  h+='<button class="btn plain" onclick="renderQuizHome();go(\'quiz\')">再来一轮</button>';
+  $('page-quiz').innerHTML=h;
+  var ub=$('btn-upload');
+  ub.onclick=function(){
+    ub.disabled=true; ub.textContent='正在上传...';
+    doUpload().then(function(){ toast('✓ 成绩已上传，电脑端下次同步即可看到'); ub.textContent='✓ 已上传'; }).catch(function(e){
+      toast('上传失败：'+e.message,3500); ub.disabled=false; ub.textContent='重试上传';
+    });
+  };
+}
+function doUpload(){
+  if(S.demo) return Promise.reject(new Error('演示模式不能上传'));
+  if(!S.cfg.token) return Promise.reject(new Error('本机未配置Token：到「设置」粘贴一次Token（保存后即可上传成绩，浏览数据不需要它）'));
+  var r=QZ.result;
+  var rec={
+    id:String(Date.now()), examinee:QZ.name, score:r.score, total_score:r.total,
+    date:new Date().toLocaleString('sv-SE',{hour12:false}).replace('T',' '),
+    question_bank:QZ.bank+'（手机）', accuracy:r.acc, qualification_level:r.level,
+    analysis_by_type:r.byType, wrong_questions:r.wrongs, question_results:r.results, source:'手机版'
+  };
+  return gistPull().then(function(){
+    var d=S.data||{}; if(!Array.isArray(d.exam_scores)) d.exam_scores=[];
+    d.exam_scores.push(rec);
+    return gistPatchData(d);
+  });
+}
+
+/* ================= 错题本 ================= */
+function myName(){ return String(S.cfg&&S.cfg.name?S.cfg.name:'').trim(); }
+function isMine(rec){ var me=myName(); return !!me && String(rec.examinee||'').trim()===me; }
+function noNameHint(page, title){
+  $('page-'+page).innerHTML='<div class="card"><h3>'+title+'</h3><div class="hint">未填写姓名。'+title+'只显示你本人的记录（按「设置→答题人姓名」匹配），别人的错题和成绩不会出现。请先填写姓名。</div><button class="btn" onclick="go(\'set\')">去设置姓名</button></div>';
+}
+function loadWrongBook(){
+  if(!S.data){ toast('请先拉取数据'); go('set'); return; }
+  go('wrong');
+  if(!myName()){ noNameHint('wrong','错题本'); return; }
+  var map={};
+  (S.data.exam_scores||[]).forEach(function(rec){
+    if(!isMine(rec)) return; /* 只统计本人的错题 */
+    (rec.wrong_questions||[]).forEach(function(w){
+      if(!w||!w['题目']) return;
+      var k=w['题目'];
+      if(!map[k]) map[k]={n:0,item:w};
+      map[k].n++;
+    });
+  });
+  var list=Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){ return b.n-a.n; });
+  var h='<div class="card"><h3>我的错题本（'+list.length+'题）</h3><div class="hint">考生：'+esc(myName())+' · 仅汇总本人全部考试记录的错题，按错误次数排序。点击底部按钮开始错题重刷。</div></div>';
+  list.forEach(function(e){
+    var w=e.item;
+    h+='<div class="wrong-item"><b>['+esc(w['题型']||'')+']</b> '+esc(w['题目'])+' <span class="badge b-bad">错'+e.n+'次</span><br>'+
+       '<span class="wa">你的答案：'+esc(w['你的答案'])+'</span><br><span class="ca">正确答案：'+esc(w['正确答案'])+'</span>'+
+       (w['解析']?'<br><span class="tag">解析：'+esc(w['解析'])+'</span>':'')+'</div>';
+  });
+  if(list.length){
+    window.WRONG_QS=list.map(function(e){ return {type:e.item['题型']||'单选题',question:e.item['题目'],options:e.item['选项']||[],answer:e.item['正确答案'],score:1,analysis:e.item['解析']||''}; });
+    h+='<button class="btn accent" onclick="startQuiz(\'错题重刷\', WRONG_QS, S.cfg.name||\'答题人\')">重刷这'+list.length+'道错题</button>';
+  }
+  $('page-wrong').innerHTML=h;
+}
+
+/* ================= 考试记录 ================= */
+var AI_CACHE={};
+function loadRecords(){
+  if(!S.data){ toast('请先拉取数据'); go('set'); return; }
+  go('records');
+  if(!myName()){ noNameHint('records','考试记录'); return; }
+  var all=(S.data.exam_scores||[]);
+  var mine=[]; all.forEach(function(r,i){ if(isMine(r)) mine.push([i,r]); }); /* [原索引, 记录] */
+  var sc=mine.slice().reverse();
+  var h='<div class="card"><h3>我的考试记录（'+sc.length+'条）</h3><div class="hint">考生：'+esc(myName())+' · 只显示本人的成绩；点任意一条查看短板分析。</div></div>';
+  if(!sc.length) h+='<div class="card"><div class="hint center">暂无你本人的考试记录（答题后上传成绩即出现在这里）</div></div>';
+  sc.forEach(function(pair,i){
+    var r=pair[1];
+    var acc=r.accuracy!==undefined?r.accuracy:(r.total_score?Math.round(r.score/r.total_score*1000)/10:0);
+    var lv=r.qualification_level||levelOf(acc);
+    var cls=acc>=90?'b-good':(acc>=75?'b-mid':'b-bad');
+    h+='<div class="menu-item" onclick="showRecord('+pair[0]+')"><div><div class="t">'+esc(r.question_bank||'未知题库')+' <span class="badge '+cls+'">'+esc(lv)+'</span></div>'+
+       '<div class="d">'+esc(r.date||'')+' · 得分 '+r.score+'/'+r.total_score+'（'+acc+'%）</div></div><span class="arrow">›</span></div>';
+  });
+  $('page-records').innerHTML=h;
+}
+function showRecord(idx){
+  var r=(S.data.exam_scores||[])[idx]; if(!r) return;
+  var acc=r.accuracy!==undefined?r.accuracy:(r.total_score?Math.round(r.score/r.total_score*1000)/10:0);
+  var h='<button class="btn plain" onclick="loadRecords()">‹ 返回列表</button>';
+  h+='<div class="card center"><div class="tag">'+esc(r.date||'')+' · '+esc(r.question_bank||'')+'</div>'+
+     '<div class="big-score">'+r.score+'<span style="font-size:18px;color:#8a97a8">/'+r.total_score+'</span></div>'+
+     '<span class="badge '+(acc>=90?'b-good':(acc>=75?'b-mid':'b-bad'))+'">'+esc(r.qualification_level||levelOf(acc))+' · 正确率 '+acc+'%</span><div class="hint">考生：'+esc(r.examinee||'')+'</div></div>';
+  var abt=r.analysis_by_type||{};
+  var keys=Object.keys(abt);
+  if(keys.length){
+    h+='<div class="card"><h3>能力维度得分率</h3>';
+    keys.forEach(function(t){
+      var bt=abt[t]||{},p=bt.total?Math.round((bt.got||0)/bt.total*100):0;
+      h+='<div style="display:flex;justify-content:space-between;font-size:13px"><span>'+esc(t)+'</span><span>'+bt.got+'/'+bt.total+'（'+p+'%）</span></div><div class="bar"><i style="width:'+p+'%"></i></div>';
+    });
+    h+='</div>';
+  }
+  var ws=r.wrong_questions||[];
+  if(ws.length){
+    h+='<div class="card"><h3>本次错题（'+ws.length+'题）</h3>';
+    ws.forEach(function(w){
+      h+='<div class="wrong-item"><b>['+esc(w['题型']||'')+']</b> '+esc(w['题目'])+'<br><span class="wa">你的答案：'+esc(w['你的答案'])+'</span><br><span class="ca">正确答案：'+esc(w['正确答案'])+'</span>'+(w['解析']?'<br><span class="tag">解析：'+esc(w['解析'])+'</span>':'')+'</div>';
+    });
+    h+='</div>';
+  }
+  var qr=r.question_results||[];
+  if(qr.length){ h+=renderReplay(qr); }
+  h+='<div class="card"><h3>AI 短板点评</h3><div id="ai-box" class="hint">'+(AI_CACHE[idx]?'':'点下方按钮，由AI根据本次成绩生成个性化点评。')+'</div>'+
+     '<button class="btn" id="ai-btn">'+(AI_CACHE[idx]?'重新生成':'生成AI点评')+'</button></div>';
+  $('page-records').innerHTML=h;
+  $('ai-btn').onclick=function(){
+    var box=$('ai-box'),btn=$('ai-btn');
+    if(!S.cfg.aikey){ box.innerHTML='未配置AI密钥：到「设置」填入智谱免费API Key（open.bigmodel.cn 免费申请）。'; return; }
+    btn.disabled=true; box.innerHTML='AI 正在生成点评...';
+    var stats={exam_count:1,avg_accuracy:acc,best_accuracy:acc,last_accuracy:acc,
+      ability_rates:keys.map(function(t){ var b=abt[t]; return [t,(b.total||0)?(b.got||0)/b.total:0]; }),
+      top_wrong:ws.slice(0,5).map(function(w){ return [w['题目']||'',1]; })};
+    fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.cfg.aikey},
+      body:JSON.stringify({model:'glm-4-flash',temperature:0.7,messages:[
+        {role:'system',content:'你是一名机场变电运维岗位的资深培训教官。根据考试成绩统计写一份短板点评，用【总体评定】【薄弱点定位】【补练建议】三个小标题，口语化有温度，200字左右，结尾一句鼓励。薄弱点要结合给出的题型得分率与错题关键词展开。'},
+        {role:'user',content:'考生：'+(r.examinee||'')+'\n本次正确率：'+acc+'%\n题型得分率：'+stats.ability_rates.map(function(x){return x[0]+' '+Math.round(x[1]*100)+'%';}).join('，')+'\n错题：'+stats.top_wrong.map(function(x){return x[0];}).join('；')}
+      ]})
+    }).then(function(r2){ if(!r2.ok) throw new Error('接口返回 '+r2.status); return r2.json(); })
+      .then(function(j){ var t=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'(空)'; AI_CACHE[idx]=t; box.innerHTML='<div style="white-space:pre-wrap;line-height:1.7">'+esc(t)+'</div>'; btn.disabled=false; btn.textContent='重新生成'; })
+      .catch(function(e){ box.innerHTML='生成失败：'+esc(e.message)+'。手机浏览器可能被AI接口跨域拦截，请在电脑端使用AI点评。'; btn.disabled=false; });
+  };
+}
+
+/* ================= 值班表 ================= */
+function loadSchedule(){
+  if(!S.data){ toast('请先拉取数据'); go('set'); return; }
+  go('home');
+  var sc=S.data['值班表_手机同步'];
+  if(!sc||!sc.days){ toast('云端暂无值班表数据：请先在电脑端「员工管理→值班管理」生成一次排班表',4000); return; }
+  var today=new Date();
+  var isCur=(today.getFullYear()===sc.year&&(today.getMonth()+1)===sc.month);
+  var todayD=isCur?today.getDate():-1;
+  var me=S.cfg.name||'';
+  var h='<div class="card"><h3>'+sc.year+'年'+sc.month+'月 值班表</h3><div class="hint">更新于 '+esc(sc.generated_at||'')+' · 电脑端「值班表同步手机」保存上传后自动更新</div>'+
+    '<div style="overflow-x:auto"><table class="sched"><tr><th>日期</th><th>星期</th><th>科值班</th><th>机场东变</th><th>白班</th></tr>';
+  sc.days.forEach(function(d){
+    var meCls=function(v){ return (me&&v&&v.indexOf(me)>=0)?' me':''; };
+    h+='<tr'+(d.day===todayD?' class="today"':'')+'><td'+(d.day===todayD?' style="color:#0369a1;font-weight:700"':'')+'>'+d.day+'日'+(d.day===todayD?' 今天':'')+'</td><td>'+esc(d.week)+'</td>'+
+       '<td class="'+meCls(d.ke)+'">'+esc(d.ke)+'</td><td class="'+meCls(d.airport)+'">'+esc(d.airport)+'</td><td class="'+meCls(d.white)+'">'+esc(d.white)+'</td></tr>';
+  });
+  h+='</table></div></div><div class="card"><div class="hint">提示：把「设置」里的答题人姓名填成本人姓名，值班表中自己的名字会高亮。</div></div>';
+  $('page-home').insertAdjacentHTML('beforeend','<div id="sched-view">'+h+'</div>');
+  var sv=$('sched-view'); setTimeout(function(){ sv&&sv.scrollIntoView(); },50);
+  setTimeout(function(){ sv&&sv.remove(); },30000);
+  toast('值班表已显示在首页下方（30秒后自动收起）',3000);
+}
+
+/* ================= 电量数据 ================= */
+function loadPower(){
+  if(!S.data){ toast('请先拉取数据'); go('set'); return; }
+  go('home');
+  var d=S.data;
+  var h='<div class="card"><h3>本周电量概览</h3><div class="grid2">'+
+    '<div class="stat"><div class="v">'+fmtPower(d['本周电量'])+'</div><div class="k">本周电量</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(d['上周电量'])+'</div><div class="k">上周电量</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(d['电量环比'])+'%</div><div class="k">环比</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(d['电量同比'])+'%</div><div class="k">同比</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(d['本周临飞线电量'])+'</div><div class="k">本周临飞线</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(d['本周双飞线电量'])+'</div><div class="k">本周双飞线</div></div>'+
+    '</div><div class="hint">去年同期电量：'+fmtPower(d['去年同期电量'])+'</div></div>';
+  var ph=S.power||[];
+  if(ph.length){
+    var recent=ph.slice(-12);
+    h+='<div class="card"><h3>周电量趋势（最近'+recent.length+'次）</h3><canvas id="pw-cv" style="width:100%;height:170px"></canvas></div>';
+    h+='<div class="card"><h3>历史记录</h3>';
+    ph.slice().reverse().slice(0,10).forEach(function(p){
+      h+='<div class="row"><span>'+esc(p.time||'')+'</span><span><b>'+fmtPower(p.weekly_power)+'</b> <span class="tag">环比 '+(p.ratio===undefined||p.ratio===null?'-':p.ratio+'%')+' · 同比 '+(p.yoy===undefined||p.yoy===null?'-':p.yoy+'%')+'</span></span></div>';
+    });
+    h+='</div>';
+  } else {
+    h+='<div class="card"><div class="hint">云端暂无电量历史（power_history.json）</div></div>';
+  }
+  $('page-home').insertAdjacentHTML('beforeend','<div id="pw-view">'+h+'</div>');
+  if(ph.length){ drawPowerTrend(ph.slice(-12)); }
+  setTimeout(function(){ var sv=$('pw-view'); sv&&sv.scrollIntoView(); },60);
+  setTimeout(function(){ var sv=$('pw-view'); sv&&sv.remove(); },30000);
+  toast('电量数据已显示在首页下方（30秒后自动收起）',3000);
+}
+function drawPowerTrend(list){
+  var cv=$('pw-cv'); if(!cv) return;
+  var W=cv.clientWidth||320,H=170; cv.width=W*2; cv.height=H*2;
+  var ctx=cv.getContext('2d'); ctx.scale(2,2);
+  var vals=list.map(function(p){ return parseFloat(p.weekly_power)||0; });
+  var min=Math.min.apply(null,vals),max=Math.max.apply(null,vals);
+  if(max===min){ max=min+1; }
+  var pad=26,step=(W-pad*2)/Math.max(1,vals.length-1);
+  ctx.strokeStyle='#e2e8f0'; ctx.beginPath();
+  for(var g=0;g<4;g++){ var gy=pad+(H-pad*2)*g/3; ctx.moveTo(pad,gy); ctx.lineTo(W-pad,gy); }
+  ctx.stroke();
+  ctx.strokeStyle='#06B6D4'; ctx.lineWidth=2.2; ctx.beginPath();
+  vals.forEach(function(v,i){
+    var x=pad+step*i, y=H-pad-(v-min)/(max-min)*(H-pad*2);
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  });
+  ctx.stroke();
+  ctx.fillStyle='#1E3A5F';
+  vals.forEach(function(v,i){
+    var x=pad+step*i, y=H-pad-(v-min)/(max-min)*(H-pad*2);
+    ctx.beginPath(); ctx.arc(x,y,3,0,7); ctx.fill();
+  });
+  ctx.font='10px sans-serif'; ctx.fillStyle='#8a97a8';
+  ctx.fillText(max,2,pad+4); ctx.fillText(min,2,H-pad);
+  ctx.fillText(list[0].time?String(list[0].time).slice(5,10):'',pad,H-6);
+  ctx.fillText(list[list.length-1].time?String(list[list.length-1].time).slice(5,10):'',W-pad-24,H-6);
+}
+
+/* ================= 设置 ================= */
+function renderSet(){
+  var builtin = !!BUILTIN_GIST; /* 云端配置已内嵌，设置页不再展示 Gist/Token 输入框 */
+  $('page-set').innerHTML=
+   '<div class="card"><h3>关于</h3>'+
+   (builtin
+     ?(BUILTIN_TOKEN
+       ?'<div class="hint">云端已内置，打开自动同步，<b>什么都不用填</b>。答题/错题本/考试记录只看「答题人姓名」对应的数据。</div>'
+       :'<div class="hint">本机为<b>在线网址版</b>：浏览题库/错题/值班表/电量已全部可用。<br>（如需在手机上上传成绩，请在电脑上用微信发送「手机版.html」文件版）</div>')
+     :'')+
+   '<label>答题人 / 我的姓名</label><input id="cf-name" value="'+esc(S.cfg.name||'')+'" placeholder="手机答题的成绩记到该名下；值班表高亮此名">'+
+   '<label>智谱AI密钥（可选，AI点评用）</label><input id="cf-aikey" type="password" value="'+esc(S.cfg.aikey||'')+'" placeholder="open.bigmodel.cn 免费申请，选填">'+
+   '<button class="btn" onclick="saveSet()">保存姓名</button>'+
+   '<button class="btn accent" onclick="pullNow()" id="pull-btn">重新拉取云端数据</button>'+
+   '<div class="hint">· 手机答题成绩直接写入 Gist 云端，电脑端下次「检查云端更新」即可拉到。<br>· 值班表需先在电脑端生成一次排班表；电量数据在电脑端记录后自动出现。</div></div>'+
+   '<div class="card"><h3>退出演示模式</h3><button class="btn plain" onclick="exitDemo()">退出演示</button></div>';
+}
+function saveSet(){
+  var oldExamCfg=S.cfg&&S.cfg.examCfg?S.cfg.examCfg:null;
+  /* Gist/Token 已内嵌，不再从页面读取；只保存姓名和AI密钥 */
+  S.cfg={gist:S.cfg.gist||BUILTIN_GIST||'',token:S.cfg.token||BUILTIN_TOKEN||'',name:$('cf-name').value.trim(),aikey:$('cf-aikey').value.trim()};
+  if(oldExamCfg) S.cfg.examCfg=oldExamCfg;
+  saveCfg(); toast('✓ 配置已保存');
+}
+function pullNow(){
+  saveSet();
+  if(!S.cfg.gist){ toast('缺少 Gist ID'); return; }
+  var b=$('pull-btn'); if(b){ b.disabled=true; b.textContent='正在拉取...'; }
+  S.demo=false;
+  gistPull().then(function(){
+    $('hdrSub').textContent='智能办公系统 · 手机版';
+    toast('✓ 数据拉取成功',1800);
+    S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    if(b){ b.disabled=false; b.textContent='重新拉取云端数据'; }
+    renderHome(); renderQuizHome();
+  }).catch(function(e){
+    toast('拉取失败：'+e.message,4000);
+    if(b){ b.disabled=false; b.textContent='重试拉取'; }
+  });
+}
+function exitDemo(){
+  S.demo=false; S.data=null; S.banks={}; S.power=[];
+  $('hdrSub').textContent='智能办公系统 · 手机版';
+  renderHome(); renderQuizHome(); go('home'); toast('已退出演示模式');
+}
+function autoPull(){
+  /* 启动自动同步：配置已内嵌，打开页面无需任何操作 */
+  if(!S.cfg.gist||!S.cfg.token){ return; }
+  toast('正在自动同步云端数据...',2000);
+  gistPull().then(function(){
+    if(S.demo){ return; }
+    $('hdrSub').textContent='智能办公系统 · 手机版';
+    S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    renderHome(); renderQuizHome();
+    toast('✓ 云端数据已同步',1800);
+  }).catch(function(e){
+    if(S.demo){ return; }
+    toast('云端自动同步失败：'+e.message+'（可到「设置」手动重试）',4000);
+    renderHome();
+  });
+}
+
+/* ================= 启动 ================= */
+renderHome(); renderSet(); renderQuizHome();
+if(S.cfg.gist){ /* Gist 已内嵌即可自动拉取（无Token时匿名只读） */
+  $('homeNotCfg').style.display='none'; /* 已内置配置，无需提示 */
+  autoPull();
+} else {
+  $('homeNotCfg').style.display='block';
+}
+</script>
+</body>
+</html>
