@@ -105,6 +105,7 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
   <div class="menu-item" onclick="loadWrongBook()"><div><div class="t">📕 错题本</div><div class="d">历次错题汇总，支持错题重刷</div></div><span class="arrow">›</span></div>
   <div class="menu-item" onclick="loadRecords()"><div><div class="t">📊 考试记录</div><div class="d">成绩、短板分析与AI点评</div></div><span class="arrow">›</span></div>
   <div class="menu-item" onclick="loadSchedule()"><div><div class="t">🗓 值班表</div><div class="d">查看排班，高亮自己的班</div></div><span class="arrow">›</span></div>
+  <div class="menu-item" onclick="openDynamic()"><div><div class="t">🧭 思想动态排查</div><div class="d">定期心理状态问卷，多端同步</div></div><span class="arrow">›</span></div>
   <div class="menu-item" onclick="loadPower()"><div><div class="t">⚡ 电量数据</div><div class="d">本周电量、同比环比与趋势</div></div><span class="arrow">›</span></div>
 </div>
 
@@ -114,6 +115,8 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 <div class="page" id="page-wrong"></div>
 <!-- 记录 -->
 <div class="page" id="page-records"></div>
+<!-- 思想动态排查 -->
+<div class="page" id="page-dynamic"></div>
 <!-- 设置 -->
 <div class="page" id="page-set"></div>
 
@@ -129,7 +132,7 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 
 <script>
 /* ================= 状态与工具 ================= */
-var APP_VER='20260907-final7';
+var APP_VER='20260908-dyn1';
 /* ★★★ 云端配置（已内嵌，打开自动同步）★★★
    以后要换 Gist ID 或 Token：用记事本打开本文件，找到这两行，
    只替换引号里面的字符串，保存后重新发到手机覆盖旧文件即可。 */
@@ -175,7 +178,7 @@ function go(p){
   document.querySelectorAll('.page').forEach(function(e){ e.classList.remove('active'); });
   $('page-'+p).classList.add('active');
   var tabs=document.querySelectorAll('#tabbar div');
-  var idx={home:0,quiz:1,wrong:2,records:3,set:4}[p];
+  var idx={home:0,dynamic:0,quiz:1,wrong:2,records:3,set:4}[p];
   tabs.forEach(function(t,i){ t.classList.toggle('on', i===idx); });
   window.scrollTo(0,0);
   if(p==='home') renderHome();
@@ -523,9 +526,9 @@ function normLetters(s){
   return String(s==null?'':(Array.isArray(s)?s.join(''):s)).toUpperCase().replace(/[^A-Z]/g,'').split('').sort().join('');
 }
 function countFillBlanks(text){
-  /* 与电脑端 count_fill_blanks 一致：统计题干中空的数量 */
+  /* 与电脑端 count_fill_blanks 一致：统计题干中空的数量（2个及以上下划线即算空） */
   var s=String(text||''), n=0;
-  [/_{3,}/g,/…{2,}/g,/（\s*）/g,/（　+）/g,/\(\s*\)/g,/【\s*】/g,/\?{3,}/g].forEach(function(p){
+  [/_{2,}/g,/…{2,}/g,/（\s*）/g,/（　+）/g,/\(\s*\)/g,/【\s*】/g,/\?{3,}/g].forEach(function(p){
     var m=s.match(p); if(m) n+=m.length;
   });
   return n;
@@ -773,6 +776,200 @@ function showRecord(idx){
       .then(function(j){ var t=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'(空)'; AI_CACHE[idx]=t; box.innerHTML='<div style="white-space:pre-wrap;line-height:1.7">'+esc(t)+'</div>'; btn.disabled=false; btn.textContent='重新生成'; })
       .catch(function(e){ box.innerHTML='生成失败：'+esc(e.message)+'。手机浏览器可能被AI接口跨域拦截，请在电脑端使用AI点评。'; btn.disabled=false; });
   };
+}
+
+/* ================= 思想动态排查 ================= */
+/* 4套专业卷与电脑端完全一致，按本人已排查次数自动轮换（每次10题） */
+var DYN_SETS=[
+{name:'A卷·安全作业与身心状态',questions:[
+ {id:1,title:'安全规程执行',question:'值班/检修/操作过程中，对“两票三制”“三措一案”等是否严格执行？',options:[['始终严格执行',10],['偶尔有疏漏但能及时纠正',5],['经常疏漏或抵触执行',0]]},
+ {id:2,title:'注意力与疲劳',question:'近期值班期间是否出现明显疲劳、注意力不集中、反应变慢等情况？',options:[['无',10],['偶尔有',5],['频繁出现',0]]},
+ {id:3,title:'设备风险认知',question:'对66kV及站内GIS/10kV间等关键设备风险点、安全措施是否清楚并能复述？',options:[['清楚且能复述要点',10],['基本清楚但细节欠缺',5],['不清楚',0]]},
+ {id:4,title:'突发事件心态',question:'面对告警、故障、紧急处置时，是否能保持冷静并按预案/规程处置？',options:[['能',10],['有压力但能控制',5],['容易慌乱或情绪失控',0]]},
+ {id:5,title:'沟通协作',question:'与同事交接班、协同操作、信息沟通是否顺畅，是否出现明显冲突？',options:[['顺畅，无冲突',10],['偶有摩擦但可沟通解决',5],['冲突明显或拒绝沟通',0]]},
+ {id:6,title:'纪律与红线',question:'近期是否存在酒后上岗、服用影响判断的药物、或其他违反劳动纪律行为？',options:[['不存在',10],['不确定/有过风险行为',0],['存在',0]],redline:true},
+ {id:7,title:'情绪与冲突',question:'近期是否出现强烈情绪波动、与人争执升级、冲动行为等风险？',options:[['无',10],['偶尔有但可自控',5],['有且难以自控',0]],redline:true},
+ {id:8,title:'生活压力影响',question:'家庭/经济/健康等压力是否明显影响到值班状态与工作投入？',options:[['不影响',10],['有一定影响',5],['影响明显',0]]},
+ {id:9,title:'风险行为倾向',question:'是否存在侥幸心理、冒险操作倾向，或对规章制度消极对待？',options:[['不存在',10],['偶尔有，但能被提醒纠正',5],['存在且较明显',0]]},
+ {id:10,title:'学习与改进',question:'是否愿意主动学习规程、参与培训复盘、持续改进自身能力？',options:[['积极主动',10],['一般，能按要求完成',5],['消极抵触',0]]}]},
+{name:'B卷·身心状态与压力疏解',questions:[
+ {id:1,title:'睡眠与休息',question:'近两周睡眠是否充足，倒班后能否有效恢复精力？',options:[['睡眠充足恢复良好',10],['偶尔失眠但白天精神尚可',5],['长期睡眠差、值班犯困',0]]},
+ {id:2,title:'疲劳累积',question:'连续值班或加班后，身体疲劳感是否明显累积、难以缓解？',options:[['无，恢复快',10],['有一定疲劳但可缓解',5],['持续疲惫、休息后仍难缓解',0]]},
+ {id:3,title:'情绪基线',question:'近期的总体情绪状态如何（是否低落、烦躁、易怒）？',options:[['平稳积极',10],['偶有波动但整体正常',5],['持续低落或明显烦躁易怒',0]]},
+ {id:4,title:'家庭压力',question:'家庭事务（老人、子女、婚姻等）是否明显牵扯精力、影响工作状态？',options:[['无影响',10],['有一定牵扯但能兼顾',5],['影响明显、已分心',0]]},
+ {id:5,title:'经济压力',question:'近期经济状况（房贷、债务、大额支出等）是否造成明显焦虑？',options:[['无明显压力',10],['有压力但可承受',5],['压力很大、时常焦虑',0]]},
+ {id:6,title:'身体健康',question:'是否有慢性病、不适症状或服用药物的情况影响值班？',options:[['身体健康无影响',10],['有小恙但不影响值班',5],['有明显健康问题或服用影响判断的药物',0]]},
+ {id:7,title:'饮酒与药物红线',question:'近24小时内是否饮酒，或正在服用影响判断力/反应力的药物后上岗？',options:[['均无',10],['不确定（如服药但未咨询）',0],['存在此情况',0]],redline:true},
+ {id:8,title:'压力疏解渠道',question:'遇到压力或烦心事时，是否有可倾诉、可求助的渠道？',options:[['有且会主动使用',10],['有渠道但很少用',5],['基本没有、独自硬扛',0]]},
+ {id:9,title:'差错苗头',question:'近期操作中是否出现走神、漏项、记录差错等苗头？',options:[['无',10],['出现过1次以内且已纠正',5],['多次出现或未引起重视',0]]},
+ {id:10,title:'求助意愿',question:'如果状态持续不好，是否愿意主动向班组或组织说明并寻求帮助？',options:[['愿意',10],['看情况，可能愿意',5],['不愿意、不好意思开口',0]]}]},
+{name:'C卷·团队协作与责任担当',questions:[
+ {id:1,title:'交接班质量',question:'交接班是否做到口头交接、记录完整、遗留问题交代清楚？',options:[['严格执行',10],['基本执行偶有简略',5],['草草了事或经常漏项',0]]},
+ {id:2,title:'命令执行与汇报',question:'对调度命令和工作安排是否坚决执行、及时反馈，有无打折扣？',options:[['坚决执行及时汇报',10],['基本服从偶有拖延',5],['消极应付或有抵触',0]]},
+ {id:3,title:'同事关系',question:'与班组成员近期相处是否融洽，有无矛盾积累或冷战？',options:[['融洽无矛盾',10],['有点小摩擦但已化解',5],['矛盾明显且未解决',0]]},
+ {id:4,title:'集体事务参与',question:'班组学习、演练、劳动等集体活动是否积极参与？',options:[['积极主动',10],['按要求参加',5],['经常推脱缺席',0]]},
+ {id:5,title:'意见表达',question:'对班组管理或工作安排有意见时，是否会通过正当渠道提出？',options:[['会主动沟通',10],['看情况偶尔提',5],['憋在心里或私下抱怨',0]]},
+ {id:6,title:'巡视责任心',question:'日常巡视、检查是否到位，有无走过场、代签代巡现象？',options:[['认真到位',10],['偶有简化但无漏项',5],['明显走过场',0]]},
+ {id:7,title:'信息规矩',question:'是否存在私自对外泄露调度信息、内部资料等违反保密规矩的行为？',options:[['不存在',10],['不确定是否涉密',0],['存在此行为',0]],redline:true},
+ {id:8,title:'跨班配合',question:'检修、试验等外部人员来站工作时，是否主动配合、履行手续？',options:[['主动规范配合',10],['能配合但不够主动',5],['消极应付或不配合',0]]},
+ {id:9,title:'帮带新人',question:'对新同事或业务较弱同事，是否愿意帮带提醒、共同提高？',options:[['主动帮带',10],['有人问会帮',5],['不愿理会',0]]},
+ {id:10,title:'归属感',question:'对当前岗位和班组的认同感、归属感如何？',options:[['认同感强',10],['一般，没什么特别感觉',5],['有离职念头或明显不满',0]]}]},
+{name:'D卷·应急处置与风险辨识',questions:[
+ {id:1,title:'预案熟悉度',question:'对本站应急预案（主变故障、全站失电、消防等）是否熟悉并能口述要点？',options:[['熟悉能口述',10],['了解大概细节欠缺',5],['基本没看过',0]]},
+ {id:2,title:'告警处置流程',question:'遇到SF6告警、开关跳闸、后台失电等异常时，处置流程是否清晰？',options:[['清晰熟练',10],['大致清楚需翻规程',5],['心里没底',0]]},
+ {id:3,title:'应急演练',question:'近期应急演练是否认真参与，是否清楚自己在预案中的职责？',options:[['认真参与且职责清楚',10],['参与了但走过场',5],['没参与或不清楚职责',0]]},
+ {id:4,title:'作业前风险辨识',question:'每次操作/作业前是否主动进行危险点分析和安全交底？',options:[['每次都做',10],['复杂作业才做',5],['基本不做',0]]},
+ {id:5,title:'安全工器具',question:'安全工器具（验电器、接地线、绝缘手套等）使用前是否检查、规范使用？',options:[['严格检查规范使用',10],['偶尔省略检查',5],['基本不检查',0]]},
+ {id:6,title:'侥幸心理',question:'是否存在“就操作一下不用那么麻烦”“应该不会有事”等侥幸冒险念头？',options:[['不存在',10],['偶尔闪念但能纠正',5],['经常有且照做',0]],redline:true},
+ {id:7,title:'隐患上报',question:'发现设备缺陷或安全隐患时，是否及时如实上报？',options:[['总是及时上报',10],['小问题偶尔拖着',5],['经常不上报或隐瞒',0]]},
+ {id:8,title:'极端天气心态',question:'大风、雷雨、覆冰等恶劣天气值班时，心态和警惕性如何？',options:[['警惕性高、有条不紊',10],['略紧张但能应对',5],['紧张慌乱或麻痹大意',0]]},
+ {id:9,title:'应急物资',question:'对应急物资（备品备件、照明、应急电源等）存放位置和使用方法是否掌握？',options:[['全面掌握',10],['掌握主要部分',5],['不清楚',0]]},
+ {id:10,title:'复盘改进',question:'异常处置或演练结束后，是否主动参与复盘、吸取教训？',options:[['主动复盘总结',10],['参加但不深入',5],['从不复盘',0]]}]}
+];
+function dynConclusion(score,total,redline){
+  if(redline) return '重点关注：存在红线风险项，建议暂停关键操作岗位并上报';
+  var pct=(total>0)?(score/total*100):0;
+  if(pct>=90) return '状态良好：可正常上岗';
+  if(pct>=75) return '状态正常：建议持续关注';
+  if(pct>=60) return '需要关注：建议谈心并加强监督';
+  return '重点关注：建议谈心+评估，必要时暂停关键操作岗位';
+}
+function dynFmtNow(){
+  var d=new Date(); function p2(n){ return (n<10?'0':'')+n; }
+  return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes());
+}
+function getMyDyn(){
+  var name=(S.cfg.name||'').trim(); if(!name) return null;
+  var d=S.data||{};
+  if(!Array.isArray(d['员工思想动态排查'])) d['员工思想动态排查']=[];
+  var arr=d['员工思想动态排查'];
+  for(var i=0;i<arr.length;i++){ if(arr[i]&&arr[i].name===name) return arr[i]; }
+  var e={name:name,last_time:'',records:[]}; arr.push(e); return e;
+}
+function openDynamic(){
+  if(!(S.cfg.name||'').trim()){
+    toast('请先到「设置」填写答题人姓名',2500);
+    go('set'); return;
+  }
+  go('dynamic');
+  renderDynamicHome();
+}
+function renderDynamicHome(){
+  var me=getMyDyn(); var recs=(me&&me.records)||[];
+  var h='<div class="card"><h3>🧭 思想动态排查</h3><div class="hint">共'+DYN_SETS.length+'套专业卷自动轮换（每次10题），作答后自动上传云端，电脑端下次同步自动合并。'+(S.cfg.aikey?'':'<br>到「设置」填入智谱免费AI密钥，可在完成后获得AI个性化评价。')+'</div>'+
+    '<button class="btn accent" id="dyn-start">开始本次排查</button></div>';
+  if(recs.length){
+    var sorted=recs.slice().sort(function(a,b){ return String(b.time||'').localeCompare(String(a.time||'')); });
+    h+='<div class="card"><h3>我的排查记录（'+recs.length+'次）</h3>';
+    sorted.slice(0,20).forEach(function(r){
+      var c=String(r.conclusion||''); var bad=c.indexOf('重点')>=0; var mid=c.indexOf('需要')>=0;
+      var cls=bad?'b-bad':(mid?'b-mid':'b-good');
+      h+='<div class="menu-item" style="cursor:default"><div><div class="t">'+esc(r.time)+' · '+esc(r.score)+'/'+esc(r.total_score)+'</div>'+
+         '<div class="d">'+esc(r.set_name||'默认题库')+'</div></div><span class="badge '+cls+'">'+esc(c.split('：')[0]||'已作答')+'</span></div>';
+    });
+    h+='</div>';
+  } else {
+    h+='<div class="card"><div class="hint">暂无排查记录，点上方按钮开始第一次排查。</div></div>';
+  }
+  $('page-dynamic').innerHTML=h;
+  $('dyn-start').onclick=function(){ renderDynamicQuiz(); };
+}
+function renderDynamicQuiz(){
+  var me=getMyDyn(); var recs=(me&&me.records)||[];
+  var set=DYN_SETS[recs.length % DYN_SETS.length];
+  var h='<div class="card"><h3>'+esc(set.name)+'</h3><div class="hint">共'+set.questions.length+'题，请如实作答，结果仅用于关心关爱员工。</div></div>';
+  set.questions.forEach(function(q,i){
+    h+='<div class="card"><div class="q-type">'+(i+1)+'. '+esc(q.title)+(q.redline?' · 红线项':'')+'</div>'+
+       '<div class="q-title" style="margin:8px 0;font-size:14px">'+esc(q.question)+'</div>';
+    q.options.forEach(function(o,oi){
+      h+='<div class="option" data-q="'+q.id+'" data-o="'+oi+'" onclick="dynPick(this)">'+esc(o[0])+'（'+o[1]+'分）</div>';
+    });
+    h+='</div>';
+  });
+  h+='<button class="btn" id="dyn-submit">提交排查结果</button>';
+  $('page-dynamic').innerHTML=h;
+  $('dyn-submit').onclick=function(){ submitDynamic(set); };
+}
+function dynPick(el){
+  var q=el.getAttribute('data-q');
+  document.querySelectorAll('.option[data-q="'+q+'"]').forEach(function(x){ x.classList.remove('sel'); });
+  el.classList.add('sel');
+}
+function submitDynamic(set){
+  var score=0,total=0,redline=false,answers=[];
+  for(var i=0;i<set.questions.length;i++){
+    var q=set.questions[i];
+    var sel=document.querySelector('.option.sel[data-q="'+q.id+'"]');
+    if(!sel){ toast('第'+(i+1)+'题还未作答',1800); return; }
+    var oi=parseInt(sel.getAttribute('data-o'),10);
+    var opt=q.options[oi];
+    var mx=0; q.options.forEach(function(o){ if(o[1]>mx) mx=o[1]; });
+    total+=mx; score+=opt[1];
+    answers.push({qid:q.id,title:q.title,selected_text:opt[0],score:opt[1]});
+    if(q.redline&&opt[1]===0){ redline=true; }
+  }
+  var rec={id:(Date.now().toString(36)+Math.random().toString(36).slice(2,8)),
+    time:dynFmtNow(),score:score,total_score:total,
+    conclusion:dynConclusion(score,total,redline),
+    set_name:set.name,answers:answers,redline:redline};
+  var btn=$('dyn-submit'); btn.disabled=true; btn.textContent='正在上传云端...';
+  /* 先拉取云端最新数据再合并上传，最大限度避免覆盖电脑端新写入内容 */
+  refreshData().then(function(){
+    var me=getMyDyn();
+    if(!Array.isArray(me.records)) me.records=[];
+    me.records.push(rec);
+    return gistPatchData(S.data);
+  }).then(function(){
+    showDynResult(rec,true);
+  }).catch(function(e){
+    btn.disabled=false; btn.textContent='提交排查结果';
+    toast('上传失败：'+esc(e.message)+'，请检查网络后重试',3500);
+  });
+}
+function showDynResult(rec,uploaded){
+  var c=String(rec.conclusion||''); var bad=c.indexOf('重点')>=0; var mid=c.indexOf('需要')>=0;
+  var cls=bad?'b-bad':(mid?'b-mid':'b-good');
+  var h='<div class="card"><h3>✅ 排查完成</h3>'+
+    '<div class="grid2"><div class="stat"><div class="v">'+rec.score+'/'+rec.total_score+'</div><div class="k">本次得分</div></div>'+
+    '<div class="stat" style="display:flex;flex-direction:column;justify-content:center"><span class="badge '+cls+'" style="font-size:13px;padding:4px 10px">'+esc(c.split('：')[0]||'已作答')+'</span><div class="k" style="margin-top:6px">'+esc(c.split('：').slice(1).join('：')||'')+'</div></div></div>'+
+    '<div class="hint" style="margin-top:8px">'+(uploaded?'已上传云端，电脑端下次同步自动合并。':'（未上传到云端）')+'</div></div>';
+  h+='<div class="card"><h3>AI 个性化评价</h3><div id="dyn-ai" class="hint">生成中...</div></div>';
+  h+='<div class="card"><h3>逐题回看</h3>';
+  (rec.answers||[]).forEach(function(a){
+    h+='<div class="menu-item" style="cursor:default"><div><div class="t">'+esc(a.title)+'</div><div class="d">选择：'+esc(a.selected_text)+'</div></div>'+
+       '<span class="badge '+(a.score>=10?'b-good':(a.score>=5?'b-mid':'b-bad'))+'">'+a.score+'分</span></div>';
+  });
+  h+='</div><button class="btn plain" onclick="renderDynamicHome()">返回排查首页</button>';
+  $('page-dynamic').innerHTML=h;
+  if(S.cfg.aikey){ dynAIComment(rec); }
+  else { $('dyn-ai').innerHTML='未配置AI密钥：到「设置」填入智谱免费Key（open.bigmodel.cn 申请）即可获得AI个性化评价。'; }
+}
+function dynAIComment(rec){
+  var lines=['员工姓名：'+(S.cfg.name||''),'总分：'+rec.score+'/'+rec.total_score,'系统结论：'+rec.conclusion,'逐题作答：'];
+  (rec.answers||[]).forEach(function(a){ lines.push('- ['+a.title+'] 选「'+a.selected_text+'」（'+a.score+'分）'); });
+  if(rec.redline) lines.push('注意：本次触发了红线风险项。');
+  fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.cfg.aikey},
+    body:JSON.stringify({model:'glm-4-flash',temperature:0.7,messages:[
+      {role:'system',content:'你是机场变电运维班组的政工干部，根据员工思想动态排查的作答情况写一段个性化评价。要求：口语化、有温度、不空谈；2-4句话（80-150字）；先肯定状态好的方面，再针对得分低或触红线的题目给出具体提醒和可操作的建议；结尾给一句鼓励或明确的关注措施。直接输出纯文本。'},
+      {role:'user',content:lines.join('\n')}
+    ]})
+  }).then(function(r){ if(!r.ok) throw new Error('接口返回 '+r.status); return r.json(); })
+  .then(function(j){
+    var t=((j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'').trim();
+    if(!t){ $('dyn-ai').innerHTML='AI返回了空内容'; return null; }
+    $('dyn-ai').innerHTML='<div style="white-space:pre-wrap;line-height:1.7">'+esc(t)+'</div>';
+    rec.ai_comment=t;
+    /* 二次上传：把AI评价补写进云端记录 */
+    return refreshData().then(function(){
+      var me=getMyDyn();
+      (me.records||[]).forEach(function(r){ if(r.id===rec.id) r.ai_comment=t; });
+      return gistPatchData(S.data);
+    });
+  }).catch(function(e){
+    var box=$('dyn-ai'); if(box) box.innerHTML='AI评价生成失败：'+esc(e.message)+'（不影响排查结果上传）';
+  });
 }
 
 /* ================= 值班表 ================= */
