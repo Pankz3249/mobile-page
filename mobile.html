@@ -779,6 +779,9 @@ function showRecord(idx){
 function loadSchedule(){
   if(!S.data){ toast('请先拉取数据'); go('set'); return; }
   go('home');
+  // 点击展开，再次点击收起（不自动收起）
+  var exist=$('sched-view');
+  if(exist){ exist.remove(); toast('值班表已收起',1500); return; }
   var sc=S.data['值班表_手机同步'];
   if(!sc||!sc.days){ toast('云端暂无值班表数据：请先在电脑端「员工管理→值班管理」生成一次排班表',4000); return; }
   var today=new Date();
@@ -795,14 +798,16 @@ function loadSchedule(){
   h+='</table></div></div><div class="card"><div class="hint">提示：把「设置」里的答题人姓名填成本人姓名，值班表中自己的名字会高亮。</div></div>';
   $('page-home').insertAdjacentHTML('beforeend','<div id="sched-view">'+h+'</div>');
   var sv=$('sched-view'); setTimeout(function(){ sv&&sv.scrollIntoView(); },50);
-  setTimeout(function(){ sv&&sv.remove(); },30000);
-  toast('值班表已显示在首页下方（30秒后自动收起）',3000);
+  toast('值班表已展开，再点一次「值班表」收起',2500);
 }
 
 /* ================= 电量数据 ================= */
 function loadPower(){
   if(!S.data){ toast('请先拉取数据'); go('set'); return; }
   go('home');
+  // 点击展开，再次点击收起（不自动收起）
+  var exist=$('pw-view');
+  if(exist){ exist.remove(); toast('电量数据已收起',1500); return; }
   var d=S.data;
   var h='<div class="card"><h3>本周电量概览</h3><div class="grid2">'+
     '<div class="stat"><div class="v">'+fmtPower(d['本周电量'])+'</div><div class="k">本周电量</div></div>'+
@@ -827,8 +832,7 @@ function loadPower(){
   $('page-home').insertAdjacentHTML('beforeend','<div id="pw-view">'+h+'</div>');
   if(ph.length){ drawPowerTrend(ph.slice(-12)); }
   setTimeout(function(){ var sv=$('pw-view'); sv&&sv.scrollIntoView(); },60);
-  setTimeout(function(){ var sv=$('pw-view'); sv&&sv.remove(); },30000);
-  toast('电量数据已显示在首页下方（30秒后自动收起）',3000);
+  toast('电量数据已展开，再点一次「电量数据」收起',2500);
 }
 function drawPowerTrend(list){
   var cv=$('pw-cv'); if(!cv) return;
