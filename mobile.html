@@ -129,7 +129,7 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 
 <script>
 /* ================= 状态与工具 ================= */
-var APP_VER='20260907-final6';
+var APP_VER='20260907-final7';
 /* ★★★ 云端配置（已内嵌，打开自动同步）★★★
    以后要换 Gist ID 或 Token：用记事本打开本文件，找到这两行，
    只替换引号里面的字符串，保存后重新发到手机覆盖旧文件即可。 */
@@ -154,6 +154,22 @@ function loadCfg(){
   };
 }
 loadCfg();
+/* 激活链接注入：电脑端生成带 #cfg=... 的链接，iPhone点开后Token存入本机localStorage
+   （Token只在链接里，不进GitHub网页内容，所以不会被GitHub撤销） */
+function checkHashCfg(){
+  var m=(location.hash||'').match(/#cfg=([A-Za-z0-9\-_=]+)/);
+  if(!m) return;
+  try{
+    var b=m[1].replace(/-/g,'+').replace(/_/g,'/');
+    var c=JSON.parse(atob(b));
+    if(c.g) S.cfg.gist=String(c.g).trim();
+    if(c.t) S.cfg.token=String(c.t).trim();
+    saveCfg();
+    history.replaceState(null,'',location.pathname+location.search);
+    window.__hashCfgDone=true;
+  }catch(e){}
+}
+checkHashCfg();
 
 function go(p){
   document.querySelectorAll('.page').forEach(function(e){ e.classList.remove('active'); });
