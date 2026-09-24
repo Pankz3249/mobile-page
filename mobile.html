@@ -135,7 +135,7 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 
 <script>
 /* ================= 状态与工具 ================= */
-var APP_VER='20260925-gitee';
+var APP_VER='20260925b-gitee';
 /* ★★★ 云端配置（已内嵌，打开自动同步）★★★
    同步通道二选一：BUILTIN_BACKEND 填 '' 或 'gist'（GitHub，国外）/'gitee'（码云，国内直连）。
    【GitHub Gist】换 Gist ID / Token：改下面 BUILTIN_GIST / BUILTIN_TOKEN 两行；
@@ -145,7 +145,7 @@ var BUILTIN_BACKEND='gitee';
 var BUILTIN_GIST ='6da3d6164011a3f42de66c3ad484dc28';
 var BUILTIN_TOKEN='';
 var BUILTIN_GITEE_OWNER='Pankz3249';
-var BUILTIN_GITEE_REPO='airport-office-sync';
+var BUILTIN_GITEE_REPO='D2pdgdz';
 var BUILTIN_GITEE_TOKEN='';
 var S = { cfg:null, data:null, banks:{}, power:[], demo:false };
 var $ = function(id){ return document.getElementById(id); };
@@ -346,6 +346,58 @@ function startDemo(){
 
 /* ================= 首页 ================= */
 function fmtPower(v){ return (v===undefined||v===null||v==='')?'-':v; }
+
+/* ---- 本周电量取数：与电脑端 calculation_manager 完全同口径 ----
+   1) ISO 周年/周序号（周一为一周起点），等价 Python date.isocalendar()
+   2) 指定周内取 time 最新、weekly_power 非空的历史记录（=电脑端 _find_week_record）
+   3) 本周/上周/去年同期分别按"今天、今天-7天、今天-364天"所在 ISO 周定位
+   4) 该周无记录时回退 data.json 快照字段（电脑端读数回填也是这个回退）
+   —— 直接读 data['本周电量'] 会显示几周前最后一次计算的旧值（如15.58） */
+function isoYW(d){
+  var t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  var dow=t.getUTCDay()||7;
+  t.setUTCDate(t.getUTCDate()+4-dow);
+  var yStart=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return [t.getUTCFullYear(), Math.ceil((((t-yStart)/86400000)+1)/7)];
+}
+function powerRecDate(r){
+  var m=String((r&&r.time)||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?new Date(+m[1],+m[2]-1,+m[3]):null;
+}
+function findWeekPowerRecord(yw){
+  var best=null;
+  (S.power||[]).forEach(function(r){
+    if(r.weekly_power===null||r.weekly_power===undefined) return;
+    var d=powerRecDate(r); if(!d) return;
+    var iw=isoYW(d);
+    if(iw[0]===yw[0]&&iw[1]===yw[1]&&(!best||String(r.time)>String(best.time))) best=r;
+  });
+  return best;
+}
+function shiftDays(n){ var d=new Date(); d.setDate(d.getDate()+n); return d; }
+function powerView(){
+  var d=S.data||{};
+  var thisR=findWeekPowerRecord(isoYW(new Date()));
+  var lastR=findWeekPowerRecord(isoYW(shiftDays(-7)));
+  var yoyR =findWeekPowerRecord(isoYW(shiftDays(-364)));
+  function pick(rec,key,snapKey){
+    if(rec&&rec[key]!==null&&rec[key]!==undefined&&rec[key]!=='') return rec[key];
+    return d[snapKey];
+  }
+  /* 临/双飞线读数：本周记录有读数用记录值，否则回退快照（电脑端 get_week_readings 同款） */
+  var lin=(thisR&&thisR.lin_reading!=null)?thisR.lin_reading:d['本周临飞线电量'];
+  var shuang=(thisR&&thisR.shuang_reading!=null)?thisR.shuang_reading:d['本周双飞线电量'];
+  return {
+    week: pick(thisR,'weekly_power','本周电量'),
+    last: pick(lastR,'weekly_power','上周电量'),
+    ratio: pick(thisR,'ratio','电量环比'),
+    yoy: pick(thisR,'yoy','电量同比'),
+    sameLastYear: pick(yoyR,'weekly_power','去年同期电量'),
+    lin:lin, shuang:shuang,
+    source: thisR?'history':'snapshot',
+    time: thisR?thisR.time:''
+  };
+}
 function refreshHomeStats(){
   if(!S.data){ return; }
   var sc=(S.data.exam_scores||[]).filter(isMine); /* 只统计本人的记录 */
@@ -353,11 +405,10 @@ function refreshHomeStats(){
   var wset={}; sc.forEach(function(r){ (r.wrong_questions||[]).forEach(function(w){ if(w&&w['题目']) wset[w['题目']]=1; }); });
   $('stWrong').textContent=Object.keys(wset).length;
   $('stBank').textContent=Object.keys(S.banks).length;
-  $('stPower').textContent=fmtPower(S.data['本周电量']);
+  $('stPower').textContent=fmtPower(powerView().week);
   $('syncTime').textContent=S.demo?'演示模式':(S._pullTime?('数据拉取于 '+S._pullTime):'');
 }
 function renderHome(){
-  var ok = S.demo || (S.cfg&&S.cfg.gist&&S.cfg.token);
   $('homeNotCfg').style.display = (S.demo||S.data)?'none':'block';
   if(S.data) refreshHomeStats();
 }
@@ -1127,14 +1178,18 @@ function loadPower(){
   var exist=$('pw-view');
   if(exist){ exist.remove(); toast('电量数据已收起',1500); return; }
   var d=S.data;
+  var pv=powerView();
+  var srcHint=pv.source==='history'
+    ? ('本周数据取自 '+pv.time+' 的计算记录')
+    : '本周尚未在电脑端计算，显示的是电脑端最后一次计算结果';
   var h='<div class="card"><h3>本周电量概览</h3><div class="grid2">'+
-    '<div class="stat"><div class="v">'+fmtPower(d['本周电量'])+'</div><div class="k">本周电量</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(d['上周电量'])+'</div><div class="k">上周电量</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(d['电量环比'])+'%</div><div class="k">环比</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(d['电量同比'])+'%</div><div class="k">同比</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(d['本周临飞线电量'])+'</div><div class="k">本周临飞线</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(d['本周双飞线电量'])+'</div><div class="k">本周双飞线</div></div>'+
-    '</div><div class="hint">去年同期电量：'+fmtPower(d['去年同期电量'])+'</div></div>';
+    '<div class="stat"><div class="v">'+fmtPower(pv.week)+'</div><div class="k">本周电量</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(pv.last)+'</div><div class="k">上周电量</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(pv.ratio)+'%</div><div class="k">环比</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(pv.yoy)+'%</div><div class="k">同比</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(pv.lin)+'</div><div class="k">本周临飞线</div></div>'+
+    '<div class="stat"><div class="v">'+fmtPower(pv.shuang)+'</div><div class="k">本周双飞线</div></div>'+
+    '</div><div class="hint">去年同期电量：'+fmtPower(pv.sameLastYear)+'<br>'+srcHint+'</div></div>';
   var ph=S.power||[];
   if(ph.length){
     var recent=ph.slice(-12);
