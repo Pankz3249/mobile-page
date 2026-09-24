@@ -88,8 +88,11 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 <!-- 首页 -->
 <div class="page active" id="page-home">
   <div id="homeNotCfg" class="card" style="display:none">
-    <h3>还未配置</h3>
-    <div class="hint">首次使用请到「设置」填入 Gist ID 和 Token（与电脑端云端同步使用同一个 Gist）。<br>也可以先用下面的演示模式体验功能。</div>
+    <h3>需要激活后使用</h3>
+    <div class="hint">本网页为 iOS 入口，数据保存在 Gitee 码云（国内直连），首次使用请：<br>
+    在电脑端运行「生成iPhone激活链接.py」，把链接微信发到本手机并点开一次（激活长期有效）。<br>
+    安卓手机无需激活，请直接打开微信收到的「手机版.html」文件。<br>
+    也可以先用下面的演示模式体验功能。</div>
     <button class="btn plain" onclick="startDemo()"> ▶ 演示模式（内置示例数据）</button>
   </div>
   <div class="card" id="homeStats">
@@ -132,12 +135,18 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 
 <script>
 /* ================= 状态与工具 ================= */
-var APP_VER='20260908-dyn1';
+var APP_VER='20260925-gitee';
 /* ★★★ 云端配置（已内嵌，打开自动同步）★★★
-   以后要换 Gist ID 或 Token：用记事本打开本文件，找到这两行，
-   只替换引号里面的字符串，保存后重新发到手机覆盖旧文件即可。 */
+   同步通道二选一：BUILTIN_BACKEND 填 '' 或 'gist'（GitHub，国外）/'gitee'（码云，国内直连）。
+   【GitHub Gist】换 Gist ID / Token：改下面 BUILTIN_GIST / BUILTIN_TOKEN 两行；
+   【Gitee 码云】换用户名/仓库名/令牌：改 BUILTIN_GITEE_OWNER / BUILTIN_GITEE_REPO / BUILTIN_GITEE_TOKEN 三行；
+   保存后重新发到手机覆盖旧文件即可（或运行「上传手机版到云端.py」更新网页）。 */
+var BUILTIN_BACKEND='gitee';
 var BUILTIN_GIST ='6da3d6164011a3f42de66c3ad484dc28';
 var BUILTIN_TOKEN='';
+var BUILTIN_GITEE_OWNER='Pankz3249';
+var BUILTIN_GITEE_REPO='airport-office-sync';
+var BUILTIN_GITEE_TOKEN='';
 var S = { cfg:null, data:null, banks:{}, power:[], demo:false };
 var $ = function(id){ return document.getElementById(id); };
 function toast(m, ms){ var t=$('toast'); t.innerHTML=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, ms||2400); }
@@ -150,26 +159,38 @@ function loadCfg(){
   try{ saved=JSON.parse(localStorage.getItem('app_cfg')||'null'); }catch(e){ saved=null; }
   saved=saved||{};
   S.cfg={
+    backend:(BUILTIN_BACKEND||saved.backend||'gist').trim(),
     gist:(BUILTIN_GIST||saved.gist||'').trim(),
     token:(BUILTIN_TOKEN||saved.token||'').trim(),
+    gOwner:(BUILTIN_GITEE_OWNER||saved.gOwner||'').trim(),
+    gRepo:(BUILTIN_GITEE_REPO||saved.gRepo||'').trim(),
+    gToken:(BUILTIN_GITEE_TOKEN||saved.gToken||'').trim(),
     name:(saved.name||'').trim(),
     aikey:(saved.aikey||'').trim()
   };
 }
 loadCfg();
-/* 激活链接注入：电脑端生成带 #cfg=... 的链接，iPhone点开后Token存入本机localStorage
-   （Token只在链接里，不进GitHub网页内容，所以不会被GitHub撤销） */
+/* 激活链接注入：电脑端生成带 #cfg=... 的链接，iPhone点开后配置存入本机localStorage
+   （Token只在链接里，不进GitHub网页内容，所以不会被GitHub撤销）
+   链接字段：b=通道(gist/gitee) g=GistID t=GistToken o=Gitee用户名 r=Gitee仓库 k=Gitee令牌 */
 function checkHashCfg(){
   var m=(location.hash||'').match(/#cfg=([A-Za-z0-9\-_=]+)/);
   if(!m) return;
   try{
     var b=m[1].replace(/-/g,'+').replace(/_/g,'/');
     var c=JSON.parse(atob(b));
+    if(c.b==='gitee'||c.b==='gist') S.cfg.backend=String(c.b).trim();
     if(c.g) S.cfg.gist=String(c.g).trim();
     if(c.t) S.cfg.token=String(c.t).trim();
+    if(c.o) S.cfg.gOwner=String(c.o).trim();
+    if(c.r) S.cfg.gRepo=String(c.r).trim();
+    if(c.k) S.cfg.gToken=String(c.k).trim();
     saveCfg();
     history.replaceState(null,'',location.pathname+location.search);
     window.__hashCfgDone=true;
+    setTimeout(function(){
+      toast('✓ 已激活：'+(S.cfg.backend==='gitee'?'Gitee 码云通道':'GitHub 通道')+'，数据可正常同步/上传',3600);
+    },300);
   }catch(e){}
 }
 checkHashCfg();
@@ -186,45 +207,117 @@ function go(p){
   if(p==='quiz' && !$('qz-list')) renderQuizHome();
 }
 
-/* ================= Gist 数据层 ================= */
+/* ================= 云端数据层（GitHub Gist / Gitee 码云 双通道） ================= */
+function hasCloudCfg(){
+  if(S.cfg.backend==='gitee'){ return !!(S.cfg.gOwner&&S.cfg.gRepo&&S.cfg.gToken); }
+  return !!S.cfg.gist;
+}
 function gistHeaders(){
   /* 无 Token 时匿名读取（iOS版从网址打开即属此场景）：看题库/记录/值班表/电量不需要Token */
   var h = { 'Accept':'application/vnd.github+json' };
   if(S.cfg.token){ h['Authorization'] = 'Bearer '+S.cfg.token; }
   return h;
 }
-function gistPull(){
+/* 把 {文件名:内容} 解析进内存（两个通道共用） */
+function absorbCloudFiles(files){
+  S.banks={}; S.power=[];
+  Object.keys(files).forEach(function(name){
+    var c=files[name]; if(!c) return;
+    if(name==='data.json'){
+      try{ S.data=JSON.parse(c); }catch(e){ console.warn('data.json解析失败'); } return;
+    }
+    if(name==='power_history.json'){
+      try{ S.power=JSON.parse(c); }catch(e){} return;
+    }
+    if(!/\.json$/i.test(name)) return;
+    try{
+      var arr=JSON.parse(c);
+      if(Array.isArray(arr)&&arr.length&&arr[0]&&arr[0].question!==undefined){ S.banks[name.replace(/\.json$/i,'')]=arr; }
+    }catch(e){}
+  });
+  if(!S.data){ S.data={}; }
+  S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+}
+function cloudPull(){
   if(S.demo){ return Promise.resolve(); }
+  if(S.cfg.backend==='gitee'){ return giteePull(); }
   return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist)+'?t='+Date.now(), { headers: gistHeaders(), cache:'no-store' })
     .then(function(r){ if(!r.ok) throw new Error('GitHub返回 '+r.status+(r.status===401?'（Token无效）':r.status===404?'（Gist ID无效）':'')); return r.json(); })
     .then(function(g){
-      S.banks={}; S.power=[];
-      Object.keys(g.files).forEach(function(name){
-        var c=g.files[name]&&g.files[name].content; if(!c) return;
-        if(name==='data.json'){
-          try{ S.data=JSON.parse(c); }catch(e){ console.warn('data.json解析失败'); } return;
-        }
-        if(name==='power_history.json'){
-          try{ S.power=JSON.parse(c); }catch(e){} return;
-        }
-        if(!/\.json$/i.test(name)) return;
-        try{
-          var arr=JSON.parse(c);
-          if(Array.isArray(arr)&&arr.length&&arr[0]&&arr[0].question!==undefined){ S.banks[name.replace(/\.json$/i,'')]=arr; }
-        }catch(e){}
-      });
-      if(!S.data){ S.data={}; }
-      S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+      var files={};
+      Object.keys(g.files||{}).forEach(function(name){ files[name]=(g.files[name]&&g.files[name].content)||''; });
+      absorbCloudFiles(files);
     });
 }
-function gistPatchData(newData){
+function cloudPatchData(newData){
   if(S.demo){ return Promise.reject(new Error('演示模式不能上传')); }
+  if(S.cfg.backend==='gitee'){ return giteePatchData(newData); }
   return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist), {
     method:'PATCH', headers: gistHeaders(),
     body: JSON.stringify({ files:{ 'data.json': { content: JSON.stringify(newData, null, 4) } } })
   }).then(function(r){ if(!r.ok) throw new Error('上传失败 GitHub '+r.status); return r.json(); });
 }
-function refreshData(){ return gistPull(); }
+
+/* --- Gitee 码云后端（国内直连，数据在私有仓库 sync/ 目录，与电脑端同格式同位置） --- */
+function giteeApi(path, opt){
+  opt=opt||{};
+  var url='https://gitee.com/api/v5/repos/'+encodeURIComponent(S.cfg.gOwner)+'/'+encodeURIComponent(S.cfg.gRepo)+path;
+  if(S.cfg.gToken){ url+=(url.indexOf('?')>=0?'&':'?')+'access_token='+encodeURIComponent(S.cfg.gToken); }
+  if(opt.ref){ url+='&ref='+encodeURIComponent(opt.ref); }
+  return fetch(url, { method:opt.method||'GET', cache:'no-store',
+    headers: opt.body?{'Content-Type':'application/json'}:{},
+    body: opt.body?JSON.stringify(opt.body):undefined })
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, status:r.status, json:j}; }); });
+}
+function b64ToUtf8(b64){
+  var bin=atob(String(b64||'').replace(/\s/g,''));
+  var bytes=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++){ bytes[i]=bin.charCodeAt(i); }
+  return new TextDecoder('utf-8').decode(bytes);
+}
+function utf8ToB64(s){
+  var bytes=new TextEncoder().encode(s);
+  var bin='';
+  for(var i=0;i<bytes.length;i++){ bin+=String.fromCharCode(bytes[i]); }
+  return btoa(bin);
+}
+function giteePull(){
+  return giteeApi('/contents/sync', {ref:'master'}).then(function(res){
+    if(!res.ok||!Array.isArray(res.json)){
+      if(res.status===404){
+        throw new Error(S.cfg.gToken
+          ? 'Gitee 仓库还没有同步数据（先在电脑端上传一次）'
+          : '需要先激活：请点电脑端「生成iPhone激活链接」发来的链接（安卓请直接用微信收到的 手机版.html 文件）');
+      }
+      throw new Error('Gitee 读取失败 '+res.status+((res.json&&res.json.message)?('：'+res.json.message):''));
+    }
+    var jobs=res.json.filter(function(it){ return it&&it.type==='file'&&/\.json$/i.test(it.name); })
+      .map(function(it){
+        return giteeApi('/git/blobs/'+it.sha).then(function(b){
+          return { name:it.name, content:b64ToUtf8(b.json&&b.json.content) };
+        });
+      });
+    return Promise.all(jobs);
+  }).then(function(list){
+    var files={};
+    (list||[]).forEach(function(it){ if(it&&it.name){ files[it.name]=it.content; } });
+    absorbCloudFiles(files);
+  });
+}
+function giteePatchData(newData){
+  var content=JSON.stringify(newData, null, 4);
+  return giteeApi('/contents/sync/data.json', {ref:'master'}).then(function(res){
+    /* Gitee与GitHub同语义：文件不存在(404/无sha)→POST新建；已存在→PUT且必须带sha */
+    var exists=res.ok&&res.json&&res.json.sha;
+    var body={ content:utf8ToB64(content), branch:'master', message:'手机端同步 data.json' };
+    if(exists){ body.sha=res.json.sha; }
+    return giteeApi('/contents/sync/data.json', { method:exists?'PUT':'POST', body:body });
+  }).then(function(res){
+    if(!res.ok){ throw new Error('上传失败 Gitee '+res.status+((res.json&&res.json.message)?('：'+res.json.message):'')); }
+    return res.json;
+  });
+}
+function refreshData(){ return cloudPull(); }
 
 /* ================= 演示数据 ================= */
 function startDemo(){
@@ -665,10 +758,10 @@ function doUpload(){
     question_bank:QZ.bank+'（手机）', accuracy:r.acc, qualification_level:r.level,
     analysis_by_type:r.byType, wrong_questions:r.wrongs, question_results:r.results, source:'手机版'
   };
-  return gistPull().then(function(){
+  return cloudPull().then(function(){
     var d=S.data||{}; if(!Array.isArray(d.exam_scores)) d.exam_scores=[];
     d.exam_scores.push(rec);
-    return gistPatchData(d);
+    return cloudPatchData(d);
   });
 }
 
@@ -918,7 +1011,7 @@ function submitDynamic(set){
     var me=getMyDyn();
     if(!Array.isArray(me.records)) me.records=[];
     me.records.push(rec);
-    return gistPatchData(S.data);
+    return cloudPatchData(S.data);
   }).then(function(){
     showDynResult(rec,true);
   }).catch(function(e){
@@ -965,7 +1058,7 @@ function dynAIComment(rec){
     return refreshData().then(function(){
       var me=getMyDyn();
       (me.records||[]).forEach(function(r){ if(r.id===rec.id) r.ai_comment=t; });
-      return gistPatchData(S.data);
+      return cloudPatchData(S.data);
     });
   }).catch(function(e){
     var box=$('dyn-ai'); if(box) box.innerHTML='AI评价生成失败：'+esc(e.message)+'（不影响排查结果上传）';
@@ -1089,34 +1182,42 @@ function drawPowerTrend(list){
 
 /* ================= 设置 ================= */
 function renderSet(){
-  var builtin = !!BUILTIN_GIST; /* 云端配置已内嵌，设置页不再展示 Gist/Token 输入框 */
+  var builtin = hasCloudCfg(); /* 云端配置已内嵌，设置页不再展示通道输入框 */
+  var hasToken = !!(S.cfg.token||S.cfg.gToken);
+  var chanName = S.cfg.backend==='gitee' ? 'Gitee 码云（国内直连）' : 'GitHub Gist';
   $('page-set').innerHTML=
    '<div class="card"><h3>关于</h3>'+
    (builtin
-     ?(BUILTIN_TOKEN
-       ?'<div class="hint">云端已内置，打开自动同步，<b>什么都不用填</b>。答题/错题本/考试记录只看「答题人姓名」对应的数据。</div>'
-       :'<div class="hint">本机为<b>在线网址版</b>：浏览题库/错题/值班表/电量已全部可用。<br>（如需在手机上上传成绩，请在电脑上用微信发送「手机版.html」文件版）</div>')
-     :'')+
+     ?(hasToken
+       ?'<div class="hint">云端已内置（'+chanName+'），打开自动同步，<b>什么都不用填</b>。答题/错题本/考试记录只看「答题人姓名」对应的数据。</div>'
+       :'<div class="hint">本机为<b>在线网址版</b>：浏览题库/错题/值班表/电量已全部可用。<br>（如需在手机上上传成绩，请在电脑上用微信发送「手机版.html」文件版，或用电脑端生成的激活链接打开）</div>')
+     :(S.cfg.backend==='gitee'
+       ?'<div class="hint">Gitee 码云通道未配置完整，请用电脑端生成激活链接，或在文件头填入 Gitee 用户名/仓库/令牌。</div>'
+       :''))+
    '<label>答题人 / 我的姓名</label><input id="cf-name" value="'+esc(S.cfg.name||'')+'" placeholder="手机答题的成绩记到该名下；值班表高亮此名">'+
    '<label>智谱AI密钥（可选，AI点评用）</label><input id="cf-aikey" type="password" value="'+esc(S.cfg.aikey||'')+'" placeholder="open.bigmodel.cn 免费申请，选填">'+
    '<button class="btn" onclick="saveSet()">保存姓名</button>'+
    '<button class="btn accent" onclick="pullNow()" id="pull-btn">重新拉取云端数据</button>'+
-   '<div class="hint">· 手机答题成绩直接写入 Gist 云端，电脑端下次「检查云端更新」即可拉到。<br>· 值班表需先在电脑端生成一次排班表；电量数据在电脑端记录后自动出现。</div></div>'+
+   '<div class="hint">· 手机答题成绩直接写入云端（与电脑端同通道），电脑端下次「检查云端更新」即可拉到。<br>· 值班表需先在电脑端生成一次排班表；电量数据在电脑端记录后自动出现。</div></div>'+
    '<div class="card"><h3>退出演示模式</h3><button class="btn plain" onclick="exitDemo()">退出演示</button></div>';
 }
 function saveSet(){
-  var oldExamCfg=S.cfg&&S.cfg.examCfg?S.cfg.examCfg:null;
-  /* Gist/Token 已内嵌，不再从页面读取；只保存姓名和AI密钥 */
-  S.cfg={gist:S.cfg.gist||BUILTIN_GIST||'',token:S.cfg.token||BUILTIN_TOKEN||'',name:$('cf-name').value.trim(),aikey:$('cf-aikey').value.trim()};
+  var old=S.cfg||{};
+  var oldExamCfg=old.examCfg?old.examCfg:null;
+  /* 通道/Gist/Gitee 配置已内嵌，不再从页面读取；只保存姓名和AI密钥，其余字段原样保留 */
+  S.cfg={ backend:old.backend||BUILTIN_BACKEND||'gist',
+    gist:old.gist||BUILTIN_GIST||'', token:old.token||BUILTIN_TOKEN||'',
+    gOwner:old.gOwner||BUILTIN_GITEE_OWNER||'', gRepo:old.gRepo||BUILTIN_GITEE_REPO||'', gToken:old.gToken||BUILTIN_GITEE_TOKEN||'',
+    name:$('cf-name').value.trim(), aikey:$('cf-aikey').value.trim()};
   if(oldExamCfg) S.cfg.examCfg=oldExamCfg;
   saveCfg(); toast('✓ 配置已保存');
 }
 function pullNow(){
   saveSet();
-  if(!S.cfg.gist){ toast('缺少 Gist ID'); return; }
+  if(!hasCloudCfg()){ toast(S.cfg.backend==='gitee'?'缺少 Gitee 配置':'缺少 Gist ID'); return; }
   var b=$('pull-btn'); if(b){ b.disabled=true; b.textContent='正在拉取...'; }
   S.demo=false;
-  gistPull().then(function(){
+  cloudPull().then(function(){
     $('hdrSub').textContent='智能办公系统 · 手机版';
     toast('✓ 数据拉取成功',1800);
     S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
@@ -1134,9 +1235,9 @@ function exitDemo(){
 }
 function autoPull(){
   /* 启动自动同步：配置已内嵌，打开页面无需任何操作 */
-  if(!S.cfg.gist||!S.cfg.token){ return; }
+  if(!hasCloudCfg()||!S.cfg.token&&!S.cfg.gToken){ return; }
   toast('正在自动同步云端数据...',2000);
-  gistPull().then(function(){
+  cloudPull().then(function(){
     if(S.demo){ return; }
     $('hdrSub').textContent='智能办公系统 · 手机版';
     S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
@@ -1151,7 +1252,7 @@ function autoPull(){
 
 /* ================= 启动 ================= */
 renderHome(); renderSet(); renderQuizHome();
-if(S.cfg.gist){ /* Gist 已内嵌即可自动拉取（无Token时匿名只读） */
+if(hasCloudCfg()){ /* 云端配置已内嵌即可自动拉取 */
   $('homeNotCfg').style.display='none'; /* 已内置配置，无需提示 */
   autoPull();
 } else {
