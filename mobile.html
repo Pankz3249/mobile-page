@@ -86,6 +86,8 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 .tr-col { max-width:78%; display:flex; flex-direction:column; }
 .tr-row.me .tr-col { align-items:flex-end; }
 .tr-meta { font-size:11px; color:#9aa7b8; margin-bottom:3px; }
+.tr-del { color:#b7b7b7; margin:0 6px; }
+.tr-del:active { color:#d9534f; }
 .tr-bub { background:#f1f3f7; border-radius:10px; padding:9px 12px; font-size:14.5px; line-height:1.55; word-break:break-all; }
 .tr-row.me .tr-bub { background:#95EC69; }
 .tr-img { max-width:100%; max-height:260px; border-radius:8px; display:block; cursor:zoom-in; }
@@ -378,12 +380,71 @@ function trBlob(sha){
     return b64ToUtf8(String((b.json&&b.json.content)||'').replace(/\s/g,''));
   });
 }
+function trMerge(add){
+  /* 按id合并消息：已下载过附件(_b64)的旧对象保留，避免历史占位把缓存冲掉 */
+  var by={}; (S.tr||[]).forEach(function(m){ by[m.id]=m; });
+  (add||[]).forEach(function(m){
+    var old=by[m.id];
+    if(old&&old._b64&&!m._b64){ m._b64=old._b64; }
+    by[m.id]=m;
+  });
+  S.tr=Object.keys(by).map(function(k){ return by[k]; });
+  S.tr.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
+}
+function trPrune(idSet){
+  /* 云端已删的消息（别的设备删的）本地同步消失。只处理曾在云端列表见过的id */
+  if(!S._trKnown){ S._trKnown={}; }
+  var gone=Object.keys(S._trKnown).filter(function(id){ return !idSet[id]; });
+  if(gone.length){
+    var rs={}; gone.forEach(function(id){ rs[id]=1; });
+    S.tr=(S.tr||[]).filter(function(m){ return !rs[m.id]; });
+  }
+  S._trKnown=idSet;
+  return gone.length;
+}
+function trLoadHistory(){
+  /* 打开互传页：拉最近50条历史的索引（不下附件，省流量；图片/文件点了才下载） */
+  if(S.demo){ return Promise.resolve(); }
+  var st=trState();
+  return trList().then(function(files){
+    var by={}; files.forEach(function(f){ by[f.name]=f.sha; });
+    var names=Object.keys(by).filter(function(n){ return TR_RE.test(n); }).sort();
+    var idSet={}; names.forEach(function(n){ idSet[n.slice(0,-5)]=1; });
+    if(!st.init){ names.slice(0,-100).forEach(function(n){ st.seen[n]=1; }); st.init=1; }
+    return Promise.all(names.slice(-50).map(function(n){
+      return trBlob(by[n]).then(function(txt){
+        var m; try{ m=JSON.parse(txt); }catch(e){ return null; }
+        if(m&&m.id){ st.seen[n]=1; }   /* 标记已见：轮询不再自动下载这些附件 */
+        return m;
+      }).catch(function(){ return null; });
+    })).then(function(ms){
+      trSave(st);
+      trMerge(ms.filter(Boolean));
+      var rn=trPrune(idSet);
+      trRender();
+      if(rn){ toast('已同步删除 '+rn+' 条消息'); }
+    });
+  }).catch(function(){ /* 历史加载失败静默，轮询仍会试 */ });
+}
+function trFetchParts(m){
+  return trList().then(function(files){
+    var by={}; files.forEach(function(f){ by[f.name]=f.sha; });
+    var ps=[];
+    for(var i=1;i<=m.parts;i++){
+      var pn=m.id+'_p'+('00'+i).slice(-3)+'.txt';
+      if(!by[pn]){ throw new Error('云端分块缺失（可能已超过30天被清理）'); }
+      ps.push(by[pn]);
+    }
+    return Promise.all(ps.map(trBlob));
+  }).then(function(chunks){ return chunks.join(''); });
+}
 function trPoll(silent){
   if(S.demo){ return Promise.resolve(); }
   var st=trState();
   return trList().then(function(files){
     var by={}; files.forEach(function(f){ by[f.name]=f.sha; });
     var names=Object.keys(by).filter(function(n){ return TR_RE.test(n); }).sort();
+    var idSet={}; names.forEach(function(n){ idSet[n.slice(0,-5)]=1; });
     if(!st.init){ names.slice(0,-100).forEach(function(n){ st.seen[n]=1; }); st.init=1; names=names.slice(-100); }
     var jobs=names.filter(function(n){ return !st.seen[n]; }).map(function(n){
       return trBlob(by[n]).then(function(txt){
@@ -401,11 +462,11 @@ function trPoll(silent){
     return Promise.all(jobs).then(function(ms){
       trSave(st);
       var fresh=(ms||[]).filter(Boolean);
-      if(fresh.length){
-        S.tr=(S.tr||[]).concat(fresh);
-        S.tr.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
-        trRender();
-      }
+      var changed=fresh.length>0;
+      if(fresh.length){ trMerge(fresh); }
+      var rn=trPrune(idSet);
+      if(changed||rn){ trRender(); }
+      if(rn){ toast('已同步删除 '+rn+' 条消息'); }
       var el=$('trStatus'); if(el){ el.textContent=' · 上次刷新 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); }
     });
   }).catch(function(e){ if(!silent){ toast('刷新失败：'+e.message); } });
@@ -416,14 +477,66 @@ function trRender(){
   (S.tr||[]).forEach(function(m){
     var me=m.uid===st.uid;
     h+='<div class="tr-row'+(me?' me':'')+'"><div class="tr-col">'
-      +'<div class="tr-meta">'+esc(m.sender)+'·'+esc(m.device)+' '+esc(String(m.time||'').slice(11,16))+'</div>';
+      +'<div class="tr-meta">'+esc(m.sender)+'·'+esc(m.device)+' '+esc(String(m.time||'').slice(11,16))
+      +'<span class="tr-del" onclick="trDelete(\''+String(m.id)+'\')">删除</span></div>';
     if(m.type==='text'){ h+='<div class="tr-bub">'+esc(m.text)+'</div>'; }
     else if(m.type==='image'&&m._b64){ h+='<img class="tr-img" src="data:'+trMime(m.name)+';base64,'+m._b64+'" onclick="trViewImg(this.src)">'; }
+    else if(m.type==='image'){ h+='<div class="tr-file" onclick="trFetchImg(\''+String(m.id)+'\')"><div class="ic">🖼</div><div><div class="nm">'+esc(m.name||'图片')+'</div><div class="sz">'+trSize(m.size)+' · 点击查看</div></div></div>'; }
     else{ h+='<div class="tr-file" onclick="trSaveFile(\''+String(m.id)+'\')"><div class="ic">📄</div><div><div class="nm">'+esc(m.name)+'</div><div class="sz">'+trSize(m.size)+' · 点击下载</div></div></div>'; }
     h+='</div></div>';
   });
   box.innerHTML=h||'<div class="hint center" style="padding:34px 0">暂无消息<br>电脑和手机都能发文字、文件、图片<br>（附件会自动存到电脑「互传文件」目录）</div>';
   var wrap=$('trChat'); if(wrap){ wrap.scrollTop=wrap.scrollHeight; }
+}
+function trFetchImg(id){
+  var m=(S.tr||[]).filter(function(x){ return x.id===id; })[0];
+  if(!m){ return; }
+  if(m._b64){ trViewImg('data:'+trMime(m.name)+';base64,'+m._b64); return; }
+  toast('正在下载图片…',30000);
+  trFetchParts(m).then(function(b64){
+    m._b64=b64; trRender();
+    trViewImg('data:'+trMime(m.name)+';base64,'+b64);
+  }).catch(function(e){ toast('图片下载失败：'+e.message); });
+}
+function trDelete(id){
+  if(!confirm('删除这条消息？\n将从云端删除（含图片/文件分块），其他电脑和手机刷新后也看不到。')){ return; }
+  toast('正在删除…',10000);
+  trList().then(function(files){
+    var targets=files.filter(function(f){
+      return f.name===id+'.json' || (f.name.indexOf(id+'_p')===0 && /\.txt$/.test(f.name));
+    });
+    var seq=Promise.resolve();
+    targets.forEach(function(f){
+      seq=seq.then(function(){
+        return giteeApi('/contents/sync/transfer/'+encodeURIComponent(f.name),
+          {method:'DELETE', body:{sha:f.sha, branch:'master', message:'互传删除'}});
+      });
+    });
+    return seq.then(function(){ return targets.length; });
+  }).then(function(n){
+    S.tr=(S.tr||[]).filter(function(m){ return m.id!==id; });
+    if(S._trKnown){ delete S._trKnown[id]; }
+    trRender(); toast('已删除 ✓');
+  }).catch(function(e){ toast('删除失败：'+e.message); });
+}
+function trClearAll(){
+  if(!(S.tr||[]).length){ toast('当前没有消息'); return; }
+  if(!confirm('清空云端全部互传消息（包括其他人发的）？\n各台电脑、手机刷新后消息全部消失。')){ return; }
+  toast('正在清空…',30000);
+  trList().then(function(files){
+    var targets=files.filter(function(f){ return TR_RE.test(f.name) || /^m\d{13}[0-9a-z]{4}_p\d{3}\.txt$/.test(f.name); });
+    var seq=Promise.resolve();
+    targets.forEach(function(f){
+      seq=seq.then(function(){
+        return giteeApi('/contents/sync/transfer/'+encodeURIComponent(f.name),
+          {method:'DELETE', body:{sha:f.sha, branch:'master', message:'互传清空'}}).catch(function(){});
+      });
+    });
+    return seq.then(function(){ return targets.length; });
+  }).then(function(n){
+    S.tr=[]; S._trKnown={}; trRender();
+    toast('已清空（删除 '+n+' 个云端文件）✓');
+  }).catch(function(e){ toast('清空失败：'+e.message); });
 }
 function trSendText(){
   if(S.demo){ toast('演示模式不能互传'); return; }
@@ -434,7 +547,7 @@ function trSendText(){
   var m={id:trNewId(),time:trNow(),uid:st.uid,sender:st.name,device:st.device,type:'text',text:v};
   trCreate(m.id+'.json', JSON.stringify(m)).then(function(){
     var st=trState(); st.seen[m.id+'.json']=1; trSave(st);   /* 防止轮询把自己发的再拉一遍 */
-    ta.value=''; S.tr=(S.tr||[]).concat([m]); trRender(); toast('已发送 ✓'); trPoll(true);
+    ta.value=''; trMerge([m]); trRender(); toast('已发送 ✓'); trPoll(true);
   }).catch(function(e){ toast('发送失败：'+e.message); });
 }
 function trSendFile(input, kind){
@@ -456,7 +569,7 @@ function trSendFile(input, kind){
     seq.then(function(){ return trCreate(id+'.json', JSON.stringify(m)); })
       .then(function(){
         var st=trState(); st.seen[id+'.json']=1; trSave(st);   /* 同上：防重复拉取 */
-        toast('已发送 ✓'); m._b64=b64; S.tr=(S.tr||[]).concat([m]); trRender(); trPoll(true);
+        toast('已发送 ✓'); m._b64=b64; trMerge([m]); trRender(); trPoll(true);
       })
       .catch(function(e){ toast('发送失败：'+e.message); });
   };
@@ -464,14 +577,23 @@ function trSendFile(input, kind){
 }
 function trSaveFile(id){
   var m=(S.tr||[]).filter(function(x){ return x.id===id; })[0];
-  if(!m||!m._b64){ toast('文件还没下载好'); return; }
-  var bin=atob(m._b64), n=bin.length, u=new Uint8Array(n);
-  for(var i=0;i<n;i++){ u[i]=bin.charCodeAt(i); }
-  var url=URL.createObjectURL(new Blob([u]));
-  var a=document.createElement('a'); a.href=url; a.download=m.name||'file';
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },5000);
-  toast('已开始下载');
+  if(!m){ return; }
+  function saveB64(){
+    var bin=atob(m._b64), n=bin.length, u=new Uint8Array(n);
+    for(var i=0;i<n;i++){ u[i]=bin.charCodeAt(i); }
+    var url=URL.createObjectURL(new Blob([u]));
+    var a=document.createElement('a'); a.href=url; a.download=m.name||'file';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },5000);
+    toast('已开始下载');
+  }
+  if(m._b64){ saveB64(); return; }
+  toast('正在下载文件…',30000);
+  trFetchParts(m).then(function(b64){
+    m._b64=b64;
+    trRender();
+    saveB64();
+  }).catch(function(e){ toast('文件下载失败：'+e.message); });
 }
 function trViewImg(src){
   var o=$('trImgOverlay');
@@ -496,8 +618,9 @@ function openTransfer(){
       +'<div style="display:flex;align-items:center;gap:8px">'
       +'<span style="font-size:13px;font-weight:600;flex:none">我的名字</span>'
       +'<input id="trName" style="margin:0;flex:1;padding:7px 9px" placeholder="发消息时显示">'
-      +'<button class="qk" style="margin:0" onclick="trSaveName()">保存</button></div>'
-      +'<div class="hint" style="margin-top:7px">电脑⇄手机互传：文字、文件、图片；单文件≤20MB，多人同时用不会冲突。<span id="trStatus"></span></div>'
+      +'<button class="qk" style="margin:0" onclick="trSaveName()">保存</button>'
+      +'<button class="qk" style="margin:0;flex:none;color:#b06000" onclick="trClearAll()">🗑 清空历史</button></div>'
+      +'<div class="hint" style="margin-top:7px">电脑⇄手机互传：文字、文件、图片；单文件≤20MB，多人同时用不会冲突。点消息旁「删除」可删单条。<span id="trStatus"></span></div>'
       +'</div>'
       +'<div class="tr-chat" id="trChat"><div id="trList"></div></div>'
       +'<div class="card" style="padding:10px;margin-top:10px">'
@@ -514,6 +637,7 @@ function openTransfer(){
   }
   $('trName').value=trState().name||'';
   trRender();
+  trLoadHistory();
   trPoll(false);
   trStop();
   S._trTimer=setInterval(function(){
