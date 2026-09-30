@@ -79,6 +79,21 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 .setrow { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
 .setrow label { margin:0; flex:1; }
 .setrow input { width:90px; margin:0; text-align:center; flex:none; }
+/* ---- 文件互传（聊天） ---- */
+.tr-chat { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); padding:12px; min-height:300px; max-height:50vh; overflow-y:auto; }
+.tr-row { display:flex; margin-bottom:12px; }
+.tr-row.me { justify-content:flex-end; }
+.tr-col { max-width:78%; display:flex; flex-direction:column; }
+.tr-row.me .tr-col { align-items:flex-end; }
+.tr-meta { font-size:11px; color:#9aa7b8; margin-bottom:3px; }
+.tr-bub { background:#f1f3f7; border-radius:10px; padding:9px 12px; font-size:14.5px; line-height:1.55; word-break:break-all; }
+.tr-row.me .tr-bub { background:#95EC69; }
+.tr-img { max-width:100%; max-height:260px; border-radius:8px; display:block; cursor:zoom-in; }
+.tr-file { display:flex; align-items:center; gap:9px; background:#f1f3f7; border-radius:10px; padding:10px 12px; min-width:190px; cursor:pointer; }
+.tr-row.me .tr-file { background:#95EC69; }
+.tr-file .ic { font-size:26px; flex:none; }
+.tr-file .nm { font-size:13px; font-weight:600; word-break:break-all; }
+.tr-file .sz { font-size:11px; color:#6b7a90; margin-top:2px; }
 </style>
 </head>
 <body>
@@ -110,6 +125,7 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
   <div class="menu-item" onclick="loadSchedule()"><div><div class="t">🗓 值班表</div><div class="d">查看排班，高亮自己的班</div></div><span class="arrow">›</span></div>
   <div class="menu-item" onclick="openDynamic()"><div><div class="t">🧭 思想动态排查</div><div class="d">定期心理状态问卷，多端同步</div></div><span class="arrow">›</span></div>
   <div class="menu-item" onclick="loadPower()"><div><div class="t">⚡ 电量数据</div><div class="d">本周电量、同比环比与趋势</div></div><span class="arrow">›</span></div>
+  <div class="menu-item" onclick="openTransfer()"><div><div class="t">📁 文件互传</div><div class="d">文字、文件、图片，电脑⇄手机多人互传</div></div><span class="arrow">›</span></div>
 </div>
 
 <!-- 答题 -->
@@ -120,6 +136,8 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 <div class="page" id="page-records"></div>
 <!-- 思想动态排查 -->
 <div class="page" id="page-dynamic"></div>
+<!-- 文件互传 -->
+<div class="page" id="page-transfer"></div>
 <!-- 设置 -->
 <div class="page" id="page-set"></div>
 
@@ -135,7 +153,7 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 
 <script>
 /* ================= 状态与工具 ================= */
-var APP_VER='20260925b-gitee';
+var APP_VER='20260930b-gitee';
 /* ★★★ 云端配置（已内嵌，打开自动同步）★★★
    同步通道二选一：BUILTIN_BACKEND 填 '' 或 'gist'（GitHub，国外）/'gitee'（码云，国内直连）。
    【GitHub Gist】换 Gist ID / Token：改下面 BUILTIN_GIST / BUILTIN_TOKEN 两行；
@@ -202,6 +220,7 @@ function go(p){
   var idx={home:0,dynamic:0,quiz:1,wrong:2,records:3,set:4}[p];
   tabs.forEach(function(t,i){ t.classList.toggle('on', i===idx); });
   window.scrollTo(0,0);
+  if(p!=='transfer'&&typeof trStop==='function'){ trStop(); }
   if(p==='home') renderHome();
   if(p==='set') renderSet();
   if(p==='quiz' && !$('qz-list')) renderQuizHome();
@@ -318,6 +337,189 @@ function giteePatchData(newData){
   });
 }
 function refreshData(){ return cloudPull(); }
+
+/* ================= 文件互传（电脑⇄手机，多人共用） =================
+   防冲突：每条消息一个独立文件 m{毫秒}{4位随机}.json，只创建不修改，多人同时发不冲突；
+   附件先传分块（每块600KB的base64段），最后传消息索引，接收方看到的分块必已齐全；
+   附件自动在电脑端存到「互传文件」目录；手机端点卡片即可下载/打开。 */
+var TR_PART=800000, TR_MAX=20*1024*1024, TR_RE=/^m\d{13}[0-9a-z]{4}\.json$/;
+function trState(){
+  var st=null;
+  try{ st=JSON.parse(localStorage.getItem('tr_state')||'null'); }catch(e){}
+  if(!st||!st.uid){ st={uid:'p'+Date.now()+Math.floor(Math.random()*900+100),device:'手机',seen:{},init:0,name:''}; }
+  if(!st.name){ st.name=(S.cfg&&S.cfg.name)||'手机用户'; }
+  return st;
+}
+function trSave(st){ try{ localStorage.setItem('tr_state', JSON.stringify(st)); }catch(e){} }
+function trNewId(){ return 'm'+Date.now()+('0000'+Math.floor(Math.random()*1679616).toString(36)).slice(-4); }
+function trNow(){ var d=new Date(),p=function(n){ return (n<10?'0':'')+n; }; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+function trSize(n){ n=+n||0; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(2)+' MB'; }
+function trMime(name){ var e=String(name||'').split('.').pop().toLowerCase(); return ({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp'})[e]||'image/jpeg'; }
+
+function trCreate(name, text){
+  return giteeApi('/contents/sync/transfer/'+encodeURIComponent(name),{
+    method:'POST',
+    body:{ content:utf8ToB64(text), branch:'master', message:'互传 '+String(name).slice(0,40) }
+  }).then(function(res){
+    if(!res.ok){ throw new Error('上传失败 '+res.status+((res.json&&res.json.message)?('：'+res.json.message):'')); }
+  });
+}
+function trList(){
+  return giteeApi('/contents/sync/transfer',{ref:'master'}).then(function(res){
+    if(!res.ok||!Array.isArray(res.json)){ if(res.status===404) return []; throw new Error('读取失败 '+res.status); }
+    return res.json.filter(function(it){ return it&&it.type==='file'; }).map(function(it){ return {name:it.name,sha:it.sha}; });
+  });
+}
+function trBlob(sha){
+  return giteeApi('/git/blobs/'+sha).then(function(b){
+    if(!b.ok) throw new Error('分块读取失败');
+    /* Gitee blob API 返回 encoding=base64：content=base64(文件内容)，
+       解一层才是文件内容的文本（消息JSON明文 或 分块的base64段），与电脑端一致 */
+    return b64ToUtf8(String((b.json&&b.json.content)||'').replace(/\s/g,''));
+  });
+}
+function trPoll(silent){
+  if(S.demo){ return Promise.resolve(); }
+  var st=trState();
+  return trList().then(function(files){
+    var by={}; files.forEach(function(f){ by[f.name]=f.sha; });
+    var names=Object.keys(by).filter(function(n){ return TR_RE.test(n); }).sort();
+    if(!st.init){ names.slice(0,-100).forEach(function(n){ st.seen[n]=1; }); st.init=1; names=names.slice(-100); }
+    var jobs=names.filter(function(n){ return !st.seen[n]; }).map(function(n){
+      return trBlob(by[n]).then(function(txt){
+        var m; try{ m=JSON.parse(txt); }catch(e){ st.seen[n]=1; return null; }
+        if(!m||!m.id){ st.seen[n]=1; return null; }
+        if(m.parts){
+          var ps=[];
+          for(var i=1;i<=m.parts;i++){ ps.push(by[m.id+'_p'+('00'+i).slice(-3)+'.txt']); }
+          return Promise.all(ps.map(trBlob)).then(function(chunks){ m._b64=chunks.join(''); return m; });
+        }
+        return m;
+      }).then(function(m){ if(m){ st.seen[n]=1; } return m; })
+        .catch(function(){ return null; });
+    });
+    return Promise.all(jobs).then(function(ms){
+      trSave(st);
+      var fresh=(ms||[]).filter(Boolean);
+      if(fresh.length){
+        S.tr=(S.tr||[]).concat(fresh);
+        S.tr.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
+        trRender();
+      }
+      var el=$('trStatus'); if(el){ el.textContent=' · 上次刷新 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); }
+    });
+  }).catch(function(e){ if(!silent){ toast('刷新失败：'+e.message); } });
+}
+function trRender(){
+  var box=$('trList'); if(!box) return;
+  var st=trState(), h='';
+  (S.tr||[]).forEach(function(m){
+    var me=m.uid===st.uid;
+    h+='<div class="tr-row'+(me?' me':'')+'"><div class="tr-col">'
+      +'<div class="tr-meta">'+esc(m.sender)+'·'+esc(m.device)+' '+esc(String(m.time||'').slice(11,16))+'</div>';
+    if(m.type==='text'){ h+='<div class="tr-bub">'+esc(m.text)+'</div>'; }
+    else if(m.type==='image'&&m._b64){ h+='<img class="tr-img" src="data:'+trMime(m.name)+';base64,'+m._b64+'" onclick="trViewImg(this.src)">'; }
+    else{ h+='<div class="tr-file" onclick="trSaveFile(\''+String(m.id)+'\')"><div class="ic">📄</div><div><div class="nm">'+esc(m.name)+'</div><div class="sz">'+trSize(m.size)+' · 点击下载</div></div></div>'; }
+    h+='</div></div>';
+  });
+  box.innerHTML=h||'<div class="hint center" style="padding:34px 0">暂无消息<br>电脑和手机都能发文字、文件、图片<br>（附件会自动存到电脑「互传文件」目录）</div>';
+  var wrap=$('trChat'); if(wrap){ wrap.scrollTop=wrap.scrollHeight; }
+}
+function trSendText(){
+  if(S.demo){ toast('演示模式不能互传'); return; }
+  if(!hasCloudCfg()){ toast('需要先激活'); return; }
+  var ta=$('trInput'), v=(ta.value||'').replace(/\s+$/,'');
+  if(!v){ return; }
+  var st=trState(); st.name=($('trName').value||'').trim()||st.name; trSave(st);
+  var m={id:trNewId(),time:trNow(),uid:st.uid,sender:st.name,device:st.device,type:'text',text:v};
+  trCreate(m.id+'.json', JSON.stringify(m)).then(function(){
+    var st=trState(); st.seen[m.id+'.json']=1; trSave(st);   /* 防止轮询把自己发的再拉一遍 */
+    ta.value=''; S.tr=(S.tr||[]).concat([m]); trRender(); toast('已发送 ✓'); trPoll(true);
+  }).catch(function(e){ toast('发送失败：'+e.message); });
+}
+function trSendFile(input, kind){
+  if(S.demo){ toast('演示模式不能互传'); return; }
+  if(!hasCloudCfg()){ toast('需要先激活'); return; }
+  var f=input.files&&input.files[0]; input.value='';
+  if(!f){ return; }
+  if(f.size>TR_MAX){ toast('文件超过20MB，请改用微信发送'); return; }
+  var st=trState(); st.name=($('trName').value||'').trim()||st.name; trSave(st);
+  toast('正在上传（'+Math.ceil(f.size/TR_PART*4/3+1)+' 块）…',120000);
+  var rd=new FileReader();
+  rd.onload=function(){
+    var b64=String(rd.result).split(',')[1]||'', id=trNewId(), parts=[];
+    for(var i=0;i<b64.length;i+=TR_PART){ parts.push(b64.slice(i,i+TR_PART)); }
+    var seq=Promise.resolve();
+    parts.forEach(function(ch,i){ seq=seq.then(function(){ return trCreate(id+'_p'+('00'+(i+1)).slice(-3)+'.txt', ch); }); });
+    var m={id:id,time:trNow(),uid:st.uid,sender:st.name,device:st.device,
+           type:(kind==='image'?'image':'file'),name:f.name,size:f.size,parts:parts.length};
+    seq.then(function(){ return trCreate(id+'.json', JSON.stringify(m)); })
+      .then(function(){
+        var st=trState(); st.seen[id+'.json']=1; trSave(st);   /* 同上：防重复拉取 */
+        toast('已发送 ✓'); m._b64=b64; S.tr=(S.tr||[]).concat([m]); trRender(); trPoll(true);
+      })
+      .catch(function(e){ toast('发送失败：'+e.message); });
+  };
+  rd.readAsDataURL(f);
+}
+function trSaveFile(id){
+  var m=(S.tr||[]).filter(function(x){ return x.id===id; })[0];
+  if(!m||!m._b64){ toast('文件还没下载好'); return; }
+  var bin=atob(m._b64), n=bin.length, u=new Uint8Array(n);
+  for(var i=0;i<n;i++){ u[i]=bin.charCodeAt(i); }
+  var url=URL.createObjectURL(new Blob([u]));
+  var a=document.createElement('a'); a.href=url; a.download=m.name||'file';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },5000);
+  toast('已开始下载');
+}
+function trViewImg(src){
+  var o=$('trImgOverlay');
+  if(!o){ o=document.createElement('div'); o.id='trImgOverlay';
+    o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;display:none;align-items:center;justify-content:center;flex-direction:column';
+    o.onclick=function(){ o.style.display='none'; };
+    document.body.appendChild(o);
+  }
+  o.innerHTML='<img src="'+src+'" style="max-width:96%;max-height:78%;border-radius:6px">'
+    +'<div style="color:#bbb;font-size:12px;margin-top:12px">长按图片可保存到相册 · 点空白处关闭</div>';
+  o.style.display='flex';
+}
+function trSaveName(){ var st=trState(); st.name=($('trName').value||'').trim()||st.name; trSave(st); toast('名字已保存'); }
+function trStop(){ if(S._trTimer){ clearInterval(S._trTimer); S._trTimer=null; } }
+function openTransfer(){
+  if(S.demo){ toast('演示模式下不可用，请先激活'); return; }
+  if(!hasCloudCfg()){ toast('需要先激活后使用'); return; }
+  go('transfer');
+  if(!$('trChat')){
+    $('page-transfer').innerHTML=
+      '<div class="card" style="padding:10px 12px">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:13px;font-weight:600;flex:none">我的名字</span>'
+      +'<input id="trName" style="margin:0;flex:1;padding:7px 9px" placeholder="发消息时显示">'
+      +'<button class="qk" style="margin:0" onclick="trSaveName()">保存</button></div>'
+      +'<div class="hint" style="margin-top:7px">电脑⇄手机互传：文字、文件、图片；单文件≤20MB，多人同时用不会冲突。<span id="trStatus"></span></div>'
+      +'</div>'
+      +'<div class="tr-chat" id="trChat"><div id="trList"></div></div>'
+      +'<div class="card" style="padding:10px;margin-top:10px">'
+      +'<textarea id="trInput" rows="3" placeholder="输入要发送的内容…" style="margin:0"></textarea>'
+      +'<div style="display:flex;gap:8px;margin-top:8px">'
+      +'<button class="qk" style="flex:1;text-align:center;margin:0;padding:9px 0" onclick="trSendText()">发送</button>'
+      +'<button class="qk" style="flex:1;text-align:center;margin:0;padding:9px 0" onclick="$(\'trFilePick\').click()">📎 发文件</button>'
+      +'<button class="qk" style="flex:1;text-align:center;margin:0;padding:9px 0" onclick="$(\'trImgPick\').click()">🖼 发图片</button>'
+      +'</div>'
+      +'<input type="file" id="trFilePick" style="display:none" onchange="trSendFile(this,\'file\')">'
+      +'<input type="file" id="trImgPick" style="display:none" accept="image/*" onchange="trSendFile(this,\'image\')">'
+      +'</div>';
+    S.tr=S.tr||[];
+  }
+  $('trName').value=trState().name||'';
+  trRender();
+  trPoll(false);
+  trStop();
+  S._trTimer=setInterval(function(){
+    if($('page-transfer').classList.contains('active')){ trPoll(true); }
+  },20000);
+}
 
 /* ================= 演示数据 ================= */
 function startDemo(){
