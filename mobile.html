@@ -107,13 +107,13 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
   <div id="homeNotCfg" class="card" style="display:none">
     <h3>需要激活后使用</h3>
     <div class="hint">本网页为 iOS 入口，数据保存在 Gitee 码云（国内直连），首次使用请：<br>
-    在电脑端运行「生成iPhone激活链接.py」，把链接微信发到本手机并点开一次（激活长期有效）。<br>
+    在电脑端软件「云端同步 → 手机版网页」点「生成手机激活链接」，把链接微信发到本手机并点开一次（激活长期有效）。<br>
     安卓手机无需激活，请直接打开微信收到的「手机版.html」文件。<br>
     也可以先用下面的演示模式体验功能。</div>
     <button class="btn plain" onclick="startDemo()"> ▶ 演示模式（内置示例数据）</button>
   </div>
   <div class="card" id="homeStats">
-    <h3>数据概览 <span class="tag" id="syncTime"></span></h3>
+    <h3>数据概览 <span class="tag" id="syncTime"></span><span class="tag" id="refreshTag" style="cursor:pointer;user-select:none" onclick="homeRefresh(this)">↻ 刷新</span></h3>
     <div class="grid2">
       <div class="stat"><div class="v" id="stExam">-</div><div class="k">累计考试人次</div></div>
       <div class="stat"><div class="v" id="stWrong">-</div><div class="k">错题本题数</div></div>
@@ -157,16 +157,17 @@ table.sched td.me { color:#0369a1; font-weight:700; background:#e0f2fe; }
 /* ================= 状态与工具 ================= */
 var APP_VER='20260930b-gitee';
 /* ★★★ 云端配置（已内嵌，打开自动同步）★★★
-   同步通道二选一：BUILTIN_BACKEND 填 '' 或 'gist'（GitHub，国外）/'gitee'（码云，国内直连）。
+   读取顺序：先 GitHub Gist（与电脑端主同步一致、数据最新），
+   连不上/超时时自动回退 Gitee 码云（国内直连兜底）；上传也是同样顺序。
    【GitHub Gist】换 Gist ID / Token：改下面 BUILTIN_GIST / BUILTIN_TOKEN 两行；
    【Gitee 码云】换用户名/仓库名/令牌：改 BUILTIN_GITEE_OWNER / BUILTIN_GITEE_REPO / BUILTIN_GITEE_TOKEN 三行；
-   保存后重新发到手机覆盖旧文件即可（或运行「上传手机版到云端.py」更新网页）。 */
-var BUILTIN_BACKEND='gitee';
+   保存后重新发到手机覆盖旧文件即可（或在电脑端软件点「更新手机版网页」发布）。 */
+var BUILTIN_BACKEND='gist';
 var BUILTIN_GIST ='6da3d6164011a3f42de66c3ad484dc28';
 var BUILTIN_TOKEN='';
 var BUILTIN_GITEE_OWNER='Pankz3249';
 var BUILTIN_GITEE_REPO='D2pdgdz';
-var BUILTIN_GITEE_TOKEN='';
+var BUILTIN_GITEE_TOKEN='b97e63aa939745685487926599c25a38';
 var S = { cfg:null, data:null, banks:{}, power:[], demo:false };
 var $ = function(id){ return document.getElementById(id); };
 function toast(m, ms){ var t=$('toast'); t.innerHTML=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, ms||2400); }
@@ -258,25 +259,56 @@ function absorbCloudFiles(files){
   });
   if(!S.data){ S.data={}; }
   S._pullTime=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+  S._lastPullTs=Date.now();
 }
+function withTimeout(p, ms, label){
+  /* 蜂窝网络下 GitHub 可能长时间无响应：超时后让调用方回退备用通道 */
+  var t;
+  var timer=new Promise(function(_,rej){ t=setTimeout(function(){ rej(new Error(label)); }, ms); });
+  return Promise.race([p, timer]).then(function(v){ clearTimeout(t); return v; },
+                                       function(e){ clearTimeout(t); throw e; });
+}
+function gistPull(){
+  return withTimeout(
+    fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist)+'?t='+Date.now(),
+          { headers: gistHeaders(), cache:'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('GitHub返回 '+r.status+(r.status===401?'（Token无效）':r.status===404?'（Gist ID无效）':'')); return r.json(); })
+      .then(function(g){
+        var files={};
+        Object.keys(g.files||{}).forEach(function(name){ files[name]=(g.files[name]&&g.files[name].content)||''; });
+        absorbCloudFiles(files);
+      }), 8000, 'GitHub 连接超时');
+}
+/* 通道顺序：先 GitHub Gist（与电脑端主同步一致，数据最新）；
+   失败/超时自动回退 Gitee 码云（国内直连兜底）。两通道配置都在本文件内置。 */
 function cloudPull(){
   if(S.demo){ return Promise.resolve(); }
-  if(S.cfg.backend==='gitee'){ return giteePull(); }
-  return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist)+'?t='+Date.now(), { headers: gistHeaders(), cache:'no-store' })
-    .then(function(r){ if(!r.ok) throw new Error('GitHub返回 '+r.status+(r.status===401?'（Token无效）':r.status===404?'（Gist ID无效）':'')); return r.json(); })
-    .then(function(g){
-      var files={};
-      Object.keys(g.files||{}).forEach(function(name){ files[name]=(g.files[name]&&g.files[name].content)||''; });
-      absorbCloudFiles(files);
-    });
+  var jobs=[];
+  if(S.cfg.backend!=='gitee'&&S.cfg.gist){ jobs.push({n:'GitHub', f:gistPull}); }
+  if(S.cfg.gOwner&&S.cfg.gRepo){ jobs.push({n:'Gitee', f:giteePull}); }
+  if(!jobs.length){ return Promise.reject(new Error('云端未配置')); }
+  var lastErr=null;
+  function next(i){
+    if(i>=jobs.length){ return Promise.reject(lastErr||new Error('所有云端通道均不可用')); }
+    return jobs[i].f().then(function(){ S._pullBackend=jobs[i].n; })
+      .catch(function(e){ lastErr=e; return next(i+1); });
+  }
+  return next(0);
 }
+function gistPatchData(newData){
+  return withTimeout(
+    fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist), {
+        method:'PATCH', headers: gistHeaders(),
+        body: JSON.stringify({ files:{ 'data.json': { content: JSON.stringify(newData, null, 4) } } })
+      }).then(function(r){ if(!r.ok) throw new Error('上传失败 GitHub '+r.status); return r.json(); }),
+    15000, 'GitHub 上传超时');
+}
+/* 上传同样先 Gist 后 Gitee：主通道连不上时成绩仍能经备用通道送达电脑端 */
 function cloudPatchData(newData){
   if(S.demo){ return Promise.reject(new Error('演示模式不能上传')); }
   if(S.cfg.backend==='gitee'){ return giteePatchData(newData); }
-  return fetch('https://api.github.com/gists/'+encodeURIComponent(S.cfg.gist), {
-    method:'PATCH', headers: gistHeaders(),
-    body: JSON.stringify({ files:{ 'data.json': { content: JSON.stringify(newData, null, 4) } } })
-  }).then(function(r){ if(!r.ok) throw new Error('上传失败 GitHub '+r.status); return r.json(); });
+  if(!(S.cfg.gOwner&&S.cfg.gRepo)){ return gistPatchData(newData); }
+  return gistPatchData(newData).catch(function(){ return giteePatchData(newData); });
 }
 
 /* --- Gitee 码云后端（国内直连，数据在私有仓库 sync/ 目录，与电脑端同格式同位置） --- */
@@ -308,7 +340,7 @@ function giteePull(){
       if(res.status===404){
         throw new Error(S.cfg.gToken
           ? 'Gitee 仓库还没有同步数据（先在电脑端上传一次）'
-          : '需要先激活：请点电脑端「生成iPhone激活链接」发来的链接（安卓请直接用微信收到的 手机版.html 文件）');
+          : '需要先激活：请点电脑端软件「云端同步→手机版网页→生成手机激活链接」发来的链接（安卓请直接用微信收到的 手机版.html 文件）');
       }
       throw new Error('Gitee 读取失败 '+res.status+((res.json&&res.json.message)?('：'+res.json.message):''));
     }
@@ -340,26 +372,33 @@ function giteePatchData(newData){
 }
 function refreshData(){ return cloudPull(); }
 
-/* ================= 文件互传（电脑⇄手机，多人共用） =================
+/* ================= 文件互传（电脑⇄手机，按互通姓名隔离） =================
+   消息存 sync/transfer/<姓名>/：手机和电脑填同一个姓名（2~12位中文/英文/数字）
+   才在同一频道，每个人只看得到自己姓名下的记录，其他人收不到。不需要密码。
    防冲突：每条消息一个独立文件 m{毫秒}{4位随机}.json，只创建不修改，多人同时发不冲突；
    附件先传分块（每块600KB的base64段），最后传消息索引，接收方看到的分块必已齐全；
    附件自动在电脑端存到「互传文件」目录；手机端点卡片即可下载/打开。 */
-var TR_PART=800000, TR_MAX=20*1024*1024, TR_RE=/^m\d{13}[0-9a-z]{4}\.json$/;
+var TR_PART=800000, TR_MAX=20*1024*1024, TR_RE=/^m\d{13}[0-9a-z]{4}\.json$/, TR_NAME_RE=/^[一-龥A-Za-z0-9_-]{2,12}$/;
 function trState(){
   var st=null;
   try{ st=JSON.parse(localStorage.getItem('tr_state')||'null'); }catch(e){}
   if(!st||!st.uid){ st={uid:'p'+Date.now()+Math.floor(Math.random()*900+100),device:'手机',seen:{},init:0,name:''}; }
-  if(!st.name){ st.name=(S.cfg&&S.cfg.name)||'手机用户'; }
+  if(!st.name){ st.name=(S.cfg&&S.cfg.name)||''; }
   return st;
 }
 function trSave(st){ try{ localStorage.setItem('tr_state', JSON.stringify(st)); }catch(e){} }
+/* 互通通道就是本人姓名：姓名合法即已入组，无需另设密码/配对码 */
+function trCode(){ var n=String(trState().name||'').trim(); return TR_NAME_RE.test(n)?n:''; }
+function trHasCode(){ return !!trCode(); }
+/* 本姓名云端目录（姓名作为路径段），所有互传请求都走它，天然与其他姓名隔离 */
+function trBase(){ return '/contents/sync/transfer/'+encodeURIComponent(trCode()); }
 function trNewId(){ return 'm'+Date.now()+('0000'+Math.floor(Math.random()*1679616).toString(36)).slice(-4); }
 function trNow(){ var d=new Date(),p=function(n){ return (n<10?'0':'')+n; }; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
 function trSize(n){ n=+n||0; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(2)+' MB'; }
 function trMime(name){ var e=String(name||'').split('.').pop().toLowerCase(); return ({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp'})[e]||'image/jpeg'; }
 
 function trCreate(name, text){
-  return giteeApi('/contents/sync/transfer/'+encodeURIComponent(name),{
+  return giteeApi(trBase()+'/'+encodeURIComponent(name),{
     method:'POST',
     body:{ content:utf8ToB64(text), branch:'master', message:'互传 '+String(name).slice(0,40) }
   }).then(function(res){
@@ -367,7 +406,7 @@ function trCreate(name, text){
   });
 }
 function trList(){
-  return giteeApi('/contents/sync/transfer',{ref:'master'}).then(function(res){
+  return giteeApi(trBase(),{ref:'master'}).then(function(res){
     if(!res.ok||!Array.isArray(res.json)){ if(res.status===404) return []; throw new Error('读取失败 '+res.status); }
     return res.json.filter(function(it){ return it&&it.type==='file'; }).map(function(it){ return {name:it.name,sha:it.sha}; });
   });
@@ -404,8 +443,8 @@ function trPrune(idSet){
 }
 function trLoadHistory(){
   /* 打开互传页：拉最近50条历史的索引（不下附件，省流量；图片/文件点了才下载） */
-  if(S.demo){ return Promise.resolve(); }
-  var st=trState();
+  if(S.demo||!trHasCode()){ return Promise.resolve(); }
+  var st=trState(), code=trCode();
   return trList().then(function(files){
     var by={}; files.forEach(function(f){ by[f.name]=f.sha; });
     var names=Object.keys(by).filter(function(n){ return TR_RE.test(n); }).sort();
@@ -415,6 +454,7 @@ function trLoadHistory(){
       return trBlob(by[n]).then(function(txt){
         var m; try{ m=JSON.parse(txt); }catch(e){ return null; }
         if(m&&m.id){ st.seen[n]=1; }   /* 标记已见：轮询不再自动下载这些附件 */
+        if(m&&String(m.pc||'')!==code){ return null; }   /* 双保险：只收本组消息 */
         return m;
       }).catch(function(){ return null; });
     })).then(function(ms){
@@ -439,8 +479,8 @@ function trFetchParts(m){
   }).then(function(chunks){ return chunks.join(''); });
 }
 function trPoll(silent){
-  if(S.demo){ return Promise.resolve(); }
-  var st=trState();
+  if(S.demo||!trHasCode()){ return Promise.resolve(); }
+  var st=trState(), code=trCode();
   return trList().then(function(files){
     var by={}; files.forEach(function(f){ by[f.name]=f.sha; });
     var names=Object.keys(by).filter(function(n){ return TR_RE.test(n); }).sort();
@@ -450,6 +490,7 @@ function trPoll(silent){
       return trBlob(by[n]).then(function(txt){
         var m; try{ m=JSON.parse(txt); }catch(e){ st.seen[n]=1; return null; }
         if(!m||!m.id){ st.seen[n]=1; return null; }
+        if(String(m.pc||'')!==code){ st.seen[n]=1; return null; }  /* 不是本组的消息不收 */
         if(m.parts){
           var ps=[];
           for(var i=1;i<=m.parts;i++){ ps.push(by[m.id+'_p'+('00'+i).slice(-3)+'.txt']); }
@@ -485,7 +526,9 @@ function trRender(){
     else{ h+='<div class="tr-file" onclick="trSaveFile(\''+String(m.id)+'\')"><div class="ic">📄</div><div><div class="nm">'+esc(m.name)+'</div><div class="sz">'+trSize(m.size)+' · 点击下载</div></div></div>'; }
     h+='</div></div>';
   });
-  box.innerHTML=h||'<div class="hint center" style="padding:34px 0">暂无消息<br>电脑和手机都能发文字、文件、图片<br>（附件会自动存到电脑「互传文件」目录）</div>';
+  box.innerHTML=h||(trHasCode()
+    ?'<div class="hint center" style="padding:34px 0">暂无消息<br>电脑和手机都能发文字、文件、图片<br>（附件会自动存到电脑「互传文件」目录）</div>'
+    :'<div class="hint center" style="padding:34px 0">请先在上方「我的名字」里填写姓名（2~12 位中文/英文/数字）<br>电脑互传页填同一个姓名，就只能看到彼此的消息</div>');
   var wrap=$('trChat'); if(wrap){ wrap.scrollTop=wrap.scrollHeight; }
 }
 function trFetchImg(id){
@@ -499,7 +542,8 @@ function trFetchImg(id){
   }).catch(function(e){ toast('图片下载失败：'+e.message); });
 }
 function trDelete(id){
-  if(!confirm('删除这条消息？\n将从云端删除（含图片/文件分块），其他电脑和手机刷新后也看不到。')){ return; }
+  if(!trHasCode()){ toast('请先填写你的姓名'); return; }
+  if(!confirm('删除这条消息？\n将从云端删除（含图片/文件分块），同姓名的电脑和手机刷新后也看不到。')){ return; }
   toast('正在删除…',10000);
   trList().then(function(files){
     var targets=files.filter(function(f){
@@ -508,7 +552,7 @@ function trDelete(id){
     var seq=Promise.resolve();
     targets.forEach(function(f){
       seq=seq.then(function(){
-        return giteeApi('/contents/sync/transfer/'+encodeURIComponent(f.name),
+        return giteeApi(trBase()+'/'+encodeURIComponent(f.name),
           {method:'DELETE', body:{sha:f.sha, branch:'master', message:'互传删除'}});
       });
     });
@@ -520,15 +564,16 @@ function trDelete(id){
   }).catch(function(e){ toast('删除失败：'+e.message); });
 }
 function trClearAll(){
+  if(!trHasCode()){ toast('请先填写你的姓名'); return; }
   if(!(S.tr||[]).length){ toast('当前没有消息'); return; }
-  if(!confirm('清空云端全部互传消息（包括其他人发的）？\n各台电脑、手机刷新后消息全部消失。')){ return; }
+  if(!confirm('清空姓名「'+trCode()+'」的全部互传消息（包括同姓名其他设备发的）？\n各台电脑、手机刷新后消息全部消失，不影响其他姓名。')){ return; }
   toast('正在清空…',30000);
   trList().then(function(files){
     var targets=files.filter(function(f){ return TR_RE.test(f.name) || /^m\d{13}[0-9a-z]{4}_p\d{3}\.txt$/.test(f.name); });
     var seq=Promise.resolve();
     targets.forEach(function(f){
       seq=seq.then(function(){
-        return giteeApi('/contents/sync/transfer/'+encodeURIComponent(f.name),
+        return giteeApi(trBase()+'/'+encodeURIComponent(f.name),
           {method:'DELETE', body:{sha:f.sha, branch:'master', message:'互传清空'}}).catch(function(){});
       });
     });
@@ -543,8 +588,10 @@ function trSendText(){
   if(!hasCloudCfg()){ toast('需要先激活'); return; }
   var ta=$('trInput'), v=(ta.value||'').replace(/\s+$/,'');
   if(!v){ return; }
-  var st=trState(); st.name=($('trName').value||'').trim()||st.name; trSave(st);
-  var m={id:trNewId(),time:trNow(),uid:st.uid,sender:st.name,device:st.device,type:'text',text:v};
+  var code=trApplyNameFromInput();
+  if(!code){ toast('请先填写姓名（2~12 位中文/英文/数字），电脑端填同样的名字'); return; }
+  var st=trState();
+  var m={id:trNewId(),time:trNow(),uid:st.uid,pc:code,sender:st.name,device:st.device,type:'text',text:v};
   trCreate(m.id+'.json', JSON.stringify(m)).then(function(){
     var st=trState(); st.seen[m.id+'.json']=1; trSave(st);   /* 防止轮询把自己发的再拉一遍 */
     ta.value=''; trMerge([m]); trRender(); toast('已发送 ✓'); trPoll(true);
@@ -556,7 +603,9 @@ function trSendFile(input, kind){
   var f=input.files&&input.files[0]; input.value='';
   if(!f){ return; }
   if(f.size>TR_MAX){ toast('文件超过20MB，请改用微信发送'); return; }
-  var st=trState(); st.name=($('trName').value||'').trim()||st.name; trSave(st);
+  var code=trApplyNameFromInput();
+  if(!code){ toast('请先填写姓名（2~12 位中文/英文/数字），电脑端填同样的名字'); return; }
+  var st=trState();
   toast('正在上传（'+Math.ceil(f.size/TR_PART*4/3+1)+' 块）…',120000);
   var rd=new FileReader();
   rd.onload=function(){
@@ -564,7 +613,7 @@ function trSendFile(input, kind){
     for(var i=0;i<b64.length;i+=TR_PART){ parts.push(b64.slice(i,i+TR_PART)); }
     var seq=Promise.resolve();
     parts.forEach(function(ch,i){ seq=seq.then(function(){ return trCreate(id+'_p'+('00'+(i+1)).slice(-3)+'.txt', ch); }); });
-    var m={id:id,time:trNow(),uid:st.uid,sender:st.name,device:st.device,
+    var m={id:id,time:trNow(),uid:st.uid,pc:code,sender:st.name,device:st.device,
            type:(kind==='image'?'image':'file'),name:f.name,size:f.size,parts:parts.length};
     seq.then(function(){ return trCreate(id+'.json', JSON.stringify(m)); })
       .then(function(){
@@ -606,7 +655,24 @@ function trViewImg(src){
     +'<div style="color:#bbb;font-size:12px;margin-top:12px">长按图片可保存到相册 · 点空白处关闭</div>';
   o.style.display='flex';
 }
-function trSaveName(){ var st=trState(); st.name=($('trName').value||'').trim()||st.name; trSave(st); toast('名字已保存'); }
+/* 读取输入框姓名并应用为通道；姓名有改动时重置已见标记与缓存。合法返回姓名，否则 '' */
+function trApplyNameFromInput(){
+  var v=String(($('trName').value||'')).trim();
+  if(!TR_NAME_RE.test(v)){ return ''; }
+  var st=trState();
+  if(st.name!==v){ st.name=v; st.seen={}; st.init=0; trSave(st); S.tr=[]; S._trKnown={}; }
+  return v;
+}
+function trSaveName(){
+  var v=String(($('trName').value||'')).trim();
+  if(!TR_NAME_RE.test(v)){ toast('姓名需为 2~12 位中文、英文、数字（或 _ -），不含空格'); return; }
+  var st=trState();
+  if(st.name===v){ toast('名字未改动'); return; }
+  trApplyNameFromInput();
+  trRender();
+  toast('已连接到「'+v+'」的消息，正在加载…');
+  trLoadHistory(); trPoll(false);
+}
 function trStop(){ if(S._trTimer){ clearInterval(S._trTimer); S._trTimer=null; } }
 function openTransfer(){
   if(S.demo){ toast('演示模式下不可用，请先激活'); return; }
@@ -617,10 +683,10 @@ function openTransfer(){
       '<div class="card" style="padding:10px 12px">'
       +'<div style="display:flex;align-items:center;gap:8px">'
       +'<span style="font-size:13px;font-weight:600;flex:none">我的名字</span>'
-      +'<input id="trName" style="margin:0;flex:1;padding:7px 9px" placeholder="发消息时显示">'
-      +'<button class="qk" style="margin:0" onclick="trSaveName()">保存</button>'
-      +'<button class="qk" style="margin:0;flex:none;color:#b06000" onclick="trClearAll()">🗑 清空历史</button></div>'
-      +'<div class="hint" style="margin-top:7px">电脑⇄手机互传：文字、文件、图片；单文件≤20MB，多人同时用不会冲突。点消息旁「删除」可删单条。<span id="trStatus"></span></div>'
+      +'<input id="trName" maxlength="12" style="margin:0;flex:1;padding:7px 9px;font-weight:700" placeholder="填姓名，如：李广煜">'
+      +'<button class="qk" style="margin:0;flex:none" onclick="trSaveName()">连接</button>'
+      +'<button class="qk" style="margin:0;flex:none;color:#b06000" onclick="trClearAll()">🗑 清空</button></div>'
+      +'<div class="hint" style="margin-top:7px">姓名就是互通口令：电脑互传页填<b>同一个姓名</b>，你们就能互发文字、文件、图片；不同姓名的人互相收不到、也看不到历史。单文件≤20MB。<span id="trStatus"></span></div>'
       +'</div>'
       +'<div class="tr-chat" id="trChat"><div id="trList"></div></div>'
       +'<div class="card" style="padding:10px;margin-top:10px">'
@@ -671,7 +737,15 @@ function startDemo(){
 }
 
 /* ================= 首页 ================= */
-function fmtPower(v){ return (v===undefined||v===null||v==='')?'-':v; }
+function fmtPower(v){
+  if(v===undefined||v===null||v==='') return '-';
+  var n=parseFloat(v);
+  if(isNaN(n)) return v;
+  /* 与电脑端 fmt_num 同口径：保留两位小数并去尾零（14.978304→14.98，16.30→16.3） */
+  return String(Math.round(n*100)/100);
+}
+/* 临/双飞线是电能表读数，按电脑端 fmt_reading 口径保持原始输入精度，不四舍五入 */
+function fmtReading(v){ return (v===undefined||v===null||v==='')?'-':v; }
 
 /* ---- 本周电量取数：与电脑端 calculation_manager 完全同口径 ----
    1) ISO 周年/周序号（周一为一周起点），等价 Python date.isocalendar()
@@ -732,8 +806,37 @@ function refreshHomeStats(){
   $('stWrong').textContent=Object.keys(wset).length;
   $('stBank').textContent=Object.keys(S.banks).length;
   $('stPower').textContent=fmtPower(powerView().week);
-  $('syncTime').textContent=S.demo?'演示模式':(S._pullTime?('数据拉取于 '+S._pullTime):'');
+  $('syncTime').textContent=S.demo?'演示模式':(S._pullTime?('数据拉取于 '+S._pullTime+(S._pullBackend?(' · '+S._pullBackend):'')):'');
 }
+/* 首页手动刷新：重新拉云端，刷新概览；电量面板展开着就一起重渲染 */
+function homeRefresh(el){
+  if(S.demo){ toast('演示模式无需刷新'); return; }
+  if(!hasCloudCfg()){ toast('请先在「设置」里配置云端'); return; }
+  if(el){ el.textContent='↻ 刷新中…'; }
+  cloudPull().then(function(){
+    refreshHomeStats(); renderQuizHome();
+    if($('pw-view')){ renderPower(); }
+    if(el){ el.textContent='↻ 刷新'; }
+    toast('✓ 已刷新到最新数据',1500);
+  }).catch(function(e){
+    if(el){ el.textContent='↻ 刷新'; }
+    toast('刷新失败：'+e.message,3500);
+  });
+}
+/* 自动静默刷新：iPhone 微信/Safari 切回本页或重新显示页面时，
+   距上次成功拉取超过 20 秒就后台拉一次——电脑端刚同步完，切回来即是最新 */
+function maybeAutoRefresh(){
+  if(S.demo||!hasCloudCfg()){ return; }
+  if(Date.now()-(S._lastPullTs||0)<20000){ return; }
+  cloudPull().then(function(){
+    refreshHomeStats();
+    if($('pw-view')){ renderPower(); }
+  }).catch(function(){});
+}
+window.addEventListener('pageshow', maybeAutoRefresh);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible'){ maybeAutoRefresh(); }
+});
 function renderHome(){
   $('homeNotCfg').style.display = (S.demo||S.data)?'none':'block';
   if(S.data) refreshHomeStats();
@@ -1503,6 +1606,17 @@ function loadPower(){
   // 点击展开，再次点击收起（不自动收起）
   var exist=$('pw-view');
   if(exist){ exist.remove(); toast('电量数据已收起',1500); return; }
+  /* 先放"刷新中"占位并立刻从云端拉最新——
+     修复手机页面一直开着时，电脑端重新计算/同步后手机仍显示旧数据的问题 */
+  $('page-home').insertAdjacentHTML('beforeend',
+    '<div id="pw-view"><div class="card"><div class="hint">正在从云端刷新电量数据…</div></div></div>');
+  setTimeout(function(){ var sv=$('pw-view'); sv&&sv.scrollIntoView(); },60);
+  var p=(hasCloudCfg()&&!S.demo)?cloudPull():Promise.resolve();
+  p.then(function(){ renderPower(); toast('电量数据已展开，再点一次「电量数据」收起',2500); })
+   .catch(function(e){ renderPower(); toast('云端刷新失败，显示的是上次数据：'+e.message,3500); });
+}
+function renderPower(){
+  var old=$('pw-view'); if(old) old.remove();
   var d=S.data;
   var pv=powerView();
   var srcHint=pv.source==='history'
@@ -1513,8 +1627,8 @@ function loadPower(){
     '<div class="stat"><div class="v">'+fmtPower(pv.last)+'</div><div class="k">上周电量</div></div>'+
     '<div class="stat"><div class="v">'+fmtPower(pv.ratio)+'%</div><div class="k">环比</div></div>'+
     '<div class="stat"><div class="v">'+fmtPower(pv.yoy)+'%</div><div class="k">同比</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(pv.lin)+'</div><div class="k">本周临飞线</div></div>'+
-    '<div class="stat"><div class="v">'+fmtPower(pv.shuang)+'</div><div class="k">本周双飞线</div></div>'+
+    '<div class="stat"><div class="v">'+fmtReading(pv.lin)+'</div><div class="k">本周临飞线</div></div>'+
+    '<div class="stat"><div class="v">'+fmtReading(pv.shuang)+'</div><div class="k">本周双飞线</div></div>'+
     '</div><div class="hint">去年同期电量：'+fmtPower(pv.sameLastYear)+'<br>'+srcHint+'</div></div>';
   var ph=S.power||[];
   if(ph.length){
@@ -1522,7 +1636,7 @@ function loadPower(){
     h+='<div class="card"><h3>周电量趋势（最近'+recent.length+'次）</h3><canvas id="pw-cv" style="width:100%;height:170px"></canvas></div>';
     h+='<div class="card"><h3>历史记录</h3>';
     ph.slice().reverse().slice(0,10).forEach(function(p){
-      h+='<div class="row"><span>'+esc(p.time||'')+'</span><span><b>'+fmtPower(p.weekly_power)+'</b> <span class="tag">环比 '+(p.ratio===undefined||p.ratio===null?'-':p.ratio+'%')+' · 同比 '+(p.yoy===undefined||p.yoy===null?'-':p.yoy+'%')+'</span></span></div>';
+      h+='<div class="row"><span>'+esc(p.time||'')+'</span><span><b>'+fmtPower(p.weekly_power)+'</b> <span class="tag">环比 '+(p.ratio===undefined||p.ratio===null?'-':fmtPower(p.ratio)+'%')+' · 同比 '+(p.yoy===undefined||p.yoy===null?'-':fmtPower(p.yoy)+'%')+'</span></span></div>';
     });
     h+='</div>';
   } else {
@@ -1531,7 +1645,6 @@ function loadPower(){
   $('page-home').insertAdjacentHTML('beforeend','<div id="pw-view">'+h+'</div>');
   if(ph.length){ drawPowerTrend(ph.slice(-12)); }
   setTimeout(function(){ var sv=$('pw-view'); sv&&sv.scrollIntoView(); },60);
-  toast('电量数据已展开，再点一次「电量数据」收起',2500);
 }
 function drawPowerTrend(list){
   var cv=$('pw-cv'); if(!cv) return;
